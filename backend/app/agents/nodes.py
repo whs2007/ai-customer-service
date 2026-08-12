@@ -15,7 +15,11 @@ from app.core.config import get_settings
 from app.db.session import get_session_factory
 from app.models.ticket import TicketPriority
 from app.rag.retriever import run_retrieval_test
-from app.services.settings_service import get_intent_rules
+from app.services.settings_service import (
+    get_escalation_config,
+    get_intent_rules,
+    get_prompt_config,
+)
 
 MOCK_STREAM_SLEEP = 0.01
 MOCK_STREAM_SIZE = 6
@@ -47,10 +51,12 @@ async def classify_intent(state: ChatState) -> dict:
     text = state["messages"][-1]["content"]
     async with get_session_factory()() as db:
         rules = await get_intent_rules(db)
+        escalation = await get_escalation_config(db)
     intent, order_no = classify_by_rules(text, rules)
     return {
         "intent": intent,
         "order_no": order_no,
+        "escalation_threshold": escalation.threshold,
         "trace": _trace(state, "intent", int((time.perf_counter() - start) * 1000), {"intent": intent}),
     }
 
@@ -186,11 +192,6 @@ async def escalate(state: ChatState) -> dict:
         (m["content"] for m in reversed(state["messages"]) if m["role"] == "user"),
         "",
     )
-    priority = (
-        TicketPriority.HIGH.value
-        if state.get("intent") == "complaint"
-        else TicketPriority.MEDIUM.value
-    )
     citations = state.get("citations") or []
     # 诉求摘要（08 §4.5：内容 = 用户诉求摘要 + 意图 + 知识库命中情况）
     content = f"用户诉求：{last_user}"
@@ -203,6 +204,10 @@ async def escalate(state: ChatState) -> dict:
         content += f"\n知识引用：{cited_qas}"
     content = content.strip()[:2000]
     async with get_session_factory()() as db:
+        escalation = await get_escalation_config(db)
+        priority = escalation.priority_rules.get(
+            state.get("intent", "other"), TicketPriority.MEDIUM.value
+        )
         ticket = await create_ticket(
             db,
             session_id=uuid.UUID(state["session_id"]),
@@ -227,7 +232,9 @@ async def fallback(state: ChatState) -> dict:
     """兜底话术（08 §4.4 fallback 节点），escalation_count + 1。"""
     start = time.perf_counter()
     count = state.get("escalation_count", 0) + 1
-    text = "抱歉，我暂时无法回答这个问题。您可以尝试换个问法，或转人工客服。"
+    async with get_session_factory()() as db:
+        prompt = await get_prompt_config(db)
+    text = prompt.fallback_text or "抱歉，我暂时无法回答这个问题。您可以尝试换个问法，或转人工客服。"
     await _stream_text(state, text)
     return {
         "escalation_count": count,

@@ -23,6 +23,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.routes import (
     auth,
+    admin,
     chat,
     chunks,
     dashboard,
@@ -96,6 +97,7 @@ def create_app() -> FastAPI:
     app.include_router(tickets.router, prefix=settings.api_prefix)
     app.include_router(dashboard.router, prefix=settings.api_prefix)
     app.include_router(sessions.router, prefix=settings.api_prefix)
+    app.include_router(admin.router, prefix=settings.api_prefix)
 
     # 统一异常处理（08 §7 错误码规范）
     register_exception_handlers(app)

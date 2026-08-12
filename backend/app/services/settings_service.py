@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.setting import Setting
+from app.schemas.settings import ChunkingConfig, EscalationConfig, PromptConfig
 
 
 async def get_setting(db: AsyncSession, key: str) -> Setting | None:
@@ -63,3 +64,56 @@ async def set_intent_rules(db: AsyncSession, rules: dict) -> Setting:
         description="意图分类关键词与订单号规则",
     )
 
+
+async def get_prompt_config(db: AsyncSession) -> PromptConfig:
+    defaults = PromptConfig()
+    setting = await get_setting(db, "prompt_config")
+    if setting and setting.group == "prompt" and isinstance(setting.value, dict):
+        return PromptConfig(**{**defaults.model_dump(), **setting.value})
+    return defaults
+
+
+async def set_prompt_config(db: AsyncSession, cfg: PromptConfig) -> Setting:
+    return await set_setting(
+        db,
+        key="prompt_config",
+        value=cfg.model_dump(),
+        group="prompt",
+        description="系统人设 / 兜底话术 / 转人工判定规则",
+    )
+
+
+async def get_escalation_config(db: AsyncSession) -> EscalationConfig:
+    defaults = EscalationConfig()
+    setting = await get_setting(db, "escalation_config")
+    if setting and setting.group == "escalation" and isinstance(setting.value, dict):
+        return EscalationConfig(**{**defaults.model_dump(), **setting.value})
+    return defaults
+
+
+async def set_escalation_config(db: AsyncSession, cfg: EscalationConfig) -> Setting:
+    return await set_setting(
+        db,
+        key="escalation_config",
+        value=cfg.model_dump(),
+        group="escalation",
+        description="转人工条件与工单优先级规则",
+    )
+
+
+async def get_chunking_config(db: AsyncSession) -> ChunkingConfig:
+    defaults = ChunkingConfig()
+    setting = await get_setting(db, "chunking_config")
+    if setting and setting.group == "chunking" and isinstance(setting.value, dict):
+        return ChunkingConfig(**{**defaults.model_dump(), **setting.value})
+    return defaults
+
+
+async def set_chunking_config(db: AsyncSession, cfg: ChunkingConfig) -> Setting:
+    return await set_setting(
+        db,
+        key="chunking_config",
+        value=cfg.model_dump(),
+        group="chunking",
+        description="普通文本分块参数",
+    )

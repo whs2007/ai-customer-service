@@ -7,7 +7,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.models.user import Role
+from app.models.user import Role, UserStatus
 
 
 class LoginRequest(BaseModel):
@@ -37,4 +37,22 @@ class UserOut(BaseModel):
     status: str
     last_login_at: datetime | None = None
     created_at: datetime
+    updated_at: datetime | None = None
 
+
+class UserCreate(BaseModel):
+    username: str = Field(min_length=2, max_length=50, description="登录名")
+    password: str = Field(min_length=6, max_length=128, description="初始密码")
+    display_name: str = Field(min_length=1, max_length=50)
+    role: Role = Role.VIEWER
+    status: UserStatus = UserStatus.ACTIVE
+
+
+class UserUpdate(BaseModel):
+    display_name: str | None = Field(default=None, min_length=1, max_length=50)
+    role: Role | None = None
+    status: UserStatus | None = None
+
+
+class UserPasswordReset(BaseModel):
+    password: str = Field(min_length=6, max_length=128, description="新密码")

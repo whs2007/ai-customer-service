@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from app.core.exceptions import BadRequestError
-from app.pipeline.chunker import chunk_text
+from app.pipeline.chunker import DEFAULT_CHUNK_SIZE, DEFAULT_OVERLAP, chunk_text
 
 ALLOWED_EXTENSIONS = {".xlsx", ".csv", ".md", ".txt", ".pdf", ".docx"}
 MAX_FILE_SIZE = 20 * 1024 * 1024  # 20MB（04 §3.5）
@@ -92,9 +92,14 @@ def _parse_csv(path: Path) -> list[dict[str, Any]]:
     return _parse_faq_rows(rows)
 
 
-def _text_chunks(text: str, page: str | None = None) -> list[dict[str, Any]]:
+def _text_chunks(
+    text: str,
+    page: str | None = None,
+    chunk_size: int = DEFAULT_CHUNK_SIZE,
+    overlap: int = DEFAULT_OVERLAP,
+) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
-    for segment in chunk_text(text):
+    for segment in chunk_text(text, chunk_size=chunk_size, overlap=overlap):
         question = segment[:50]
         records.append(
             {
@@ -109,31 +114,38 @@ def _text_chunks(text: str, page: str | None = None) -> list[dict[str, Any]]:
     return records
 
 
-def _parse_txt_md(path: Path) -> list[dict[str, Any]]:
+def _parse_txt_md(path: Path, chunk_size: int, overlap: int) -> list[dict[str, Any]]:
     text = path.read_text(encoding="utf-8", errors="ignore")
-    return _text_chunks(text)
+    return _text_chunks(text, chunk_size=chunk_size, overlap=overlap)
 
 
-def _parse_pdf(path: Path) -> list[dict[str, Any]]:
+def _parse_pdf(path: Path, chunk_size: int, overlap: int) -> list[dict[str, Any]]:
     from pypdf import PdfReader
 
     reader = PdfReader(str(path))
     records: list[dict[str, Any]] = []
     for page_index, page in enumerate(reader.pages, start=1):
         text = page.extract_text() or ""
-        records.extend(_text_chunks(text, page=str(page_index)))
+        records.extend(
+            _text_chunks(text, page=str(page_index), chunk_size=chunk_size, overlap=overlap)
+        )
     return records
 
 
-def _parse_docx(path: Path) -> list[dict[str, Any]]:
+def _parse_docx(path: Path, chunk_size: int, overlap: int) -> list[dict[str, Any]]:
     from docx import Document as DocxDocument
 
     doc = DocxDocument(str(path))
     text = "\n".join(p.text for p in doc.paragraphs if p.text.strip())
-    return _text_chunks(text)
+    return _text_chunks(text, chunk_size=chunk_size, overlap=overlap)
 
 
-def parse_document(path: str | Path, file_type: str) -> list[dict[str, Any]]:
+def parse_document(
+    path: str | Path,
+    file_type: str,
+    chunk_size: int = DEFAULT_CHUNK_SIZE,
+    overlap: int = DEFAULT_OVERLAP,
+) -> list[dict[str, Any]]:
     """解析文件为 Chunk 记录列表（问题/答案/分类/标签/页码/行号）。"""
     path = Path(path)
     ext = f".{file_type.lower().lstrip('.')}" if not file_type.startswith(".") else file_type.lower()
@@ -145,15 +157,14 @@ def parse_document(path: str | Path, file_type: str) -> list[dict[str, Any]]:
     elif ext == ".csv":
         records = _parse_csv(path)
     elif ext in (".md", ".txt"):
-        records = _parse_txt_md(path)
+        records = _parse_txt_md(path, chunk_size, overlap)
     elif ext == ".pdf":
-        records = _parse_pdf(path)
+        records = _parse_pdf(path, chunk_size, overlap)
     elif ext == ".docx":
-        records = _parse_docx(path)
+        records = _parse_docx(path, chunk_size, overlap)
     else:
         records = []
 
     if not records:
         raise BadRequestError("未解析到有效内容，请检查文件格式")
     return records
-

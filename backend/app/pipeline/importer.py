@@ -14,6 +14,7 @@ from app.models.chunk import Chunk
 from app.models.document import Document
 from app.pipeline.parser import parse_document
 from app.rag.embeddings import EmbeddingClient
+from app.services.settings_service import get_chunking_config
 
 logger: structlog.stdlib.BoundLogger = structlog.get_logger(__name__)
 
@@ -33,7 +34,13 @@ async def process_document(doc_id: str | uuid.UUID) -> Document | None:
             doc.error_message = None
             await db.commit()
 
-            records = parse_document(Path(doc.file_url), doc.file_type)
+            chunking = await get_chunking_config(db)
+            records = parse_document(
+                Path(doc.file_url),
+                doc.file_type,
+                chunk_size=chunking.chunk_size,
+                overlap=chunking.overlap,
+            )
 
             # 重新解析时先清空旧切片与向量
             await db.execute(delete(Chunk).where(Chunk.doc_id == doc.id))
@@ -82,4 +89,3 @@ async def process_document(doc_id: str | uuid.UUID) -> Document | None:
                 "document_process_failed", doc_id=str(doc_id), error=str(exc)[:500]
             )
             return doc
-

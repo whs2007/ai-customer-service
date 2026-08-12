@@ -29,7 +29,8 @@ def route_by_intent(state: ChatState) -> str:
 
 
 def after_fallback(state: ChatState) -> str:
-    return "escalate" if state.get("escalation_count", 0) >= 2 else END
+    threshold = state.get("escalation_threshold", 2)
+    return "escalate" if state.get("escalation_count", 0) >= threshold else END
 
 
 def build_chat_graph():
@@ -54,4 +55,3 @@ def build_chat_graph():
 
 
 chat_graph = build_chat_graph()
-

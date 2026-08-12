@@ -45,6 +45,9 @@ async def list_knowledge_bases(
             name=kb.name,
             description=kb.description,
             doc_count=doc_count,
+            visibility=kb.visibility,
+            visible_roles=kb.visible_roles,
+            visible_user_ids=kb.visible_user_ids,
             created_at=kb.created_at,
             updated_at=kb.updated_at,
         )

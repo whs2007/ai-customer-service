@@ -16,6 +16,7 @@ class ChatState(TypedDict, total=False):
     order_no: str | None
     form_data: dict | None        # 对话内表单收集结果（新增）
     escalation_count: int
+    escalation_threshold: int           # 转人工阈值（settings 可配，默认 2）
     citations: list[dict]         # 知识引用片段
     order_info: dict | None       # 订单查询结果（MVP mock）
     ticket: dict | None           # 转人工工单

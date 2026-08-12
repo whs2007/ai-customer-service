@@ -17,6 +17,7 @@ from app.schemas.chat import (
     ModelProfileTestOut,
     ModelProfileUpdate,
 )
+from app.schemas.settings import ChunkingConfig, EscalationConfig, PromptConfig
 from app.services import model_profile_service, settings_service
 
 router = APIRouter(prefix="/settings", tags=["settings"])
@@ -142,4 +143,58 @@ async def activate_model_profile(
     db: AsyncSession = Depends(get_db),
 ) -> ResponseModel:
     profile = await model_profile_service.set_default_profile(db, profile_id)
-    return ok(message=f"已将 {profile.name} 设为默认对话模型")
+    return ok(message=f"已将 {profile.name} 设为默认 {profile.role} 配置")
+
+
+@router.get("/prompt", response_model=ResponseModel[PromptConfig])
+async def get_prompt_config(
+    _: User = Depends(require_roles(Role.ADMIN)),
+    db: AsyncSession = Depends(get_db),
+) -> ResponseModel:
+    return ok(data=await settings_service.get_prompt_config(db))
+
+
+@router.put("/prompt", response_model=ResponseModel[PromptConfig])
+async def update_prompt_config(
+    payload: PromptConfig,
+    _: User = Depends(require_roles(Role.ADMIN)),
+    db: AsyncSession = Depends(get_db),
+) -> ResponseModel:
+    await settings_service.set_prompt_config(db, payload)
+    return ok(data=payload, message="Prompt 配置已更新")
+
+
+@router.get("/escalation", response_model=ResponseModel[EscalationConfig])
+async def get_escalation_config(
+    _: User = Depends(require_roles(Role.ADMIN)),
+    db: AsyncSession = Depends(get_db),
+) -> ResponseModel:
+    return ok(data=await settings_service.get_escalation_config(db))
+
+
+@router.put("/escalation", response_model=ResponseModel[EscalationConfig])
+async def update_escalation_config(
+    payload: EscalationConfig,
+    _: User = Depends(require_roles(Role.ADMIN)),
+    db: AsyncSession = Depends(get_db),
+) -> ResponseModel:
+    await settings_service.set_escalation_config(db, payload)
+    return ok(data=payload, message="客服规则已更新")
+
+
+@router.get("/chunking", response_model=ResponseModel[ChunkingConfig])
+async def get_chunking_config(
+    _: User = Depends(require_roles(Role.ADMIN)),
+    db: AsyncSession = Depends(get_db),
+) -> ResponseModel:
+    return ok(data=await settings_service.get_chunking_config(db))
+
+
+@router.put("/chunking", response_model=ResponseModel[ChunkingConfig])
+async def update_chunking_config(
+    payload: ChunkingConfig,
+    _: User = Depends(require_roles(Role.ADMIN)),
+    db: AsyncSession = Depends(get_db),
+) -> ResponseModel:
+    await settings_service.set_chunking_config(db, payload)
+    return ok(data=payload, message="分块参数已更新")

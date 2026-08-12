@@ -158,3 +158,10 @@ curl -N -X POST http://127.0.0.1:8000/api/chat \
 - 工单：`/api/tickets` 列表筛选/详情（命中片段+时间线）/状态流转 open→processing→closed（ticket_notes + 审计）
 - 工作台：`/api/dashboard/stats|trend|intents`（02 §7 口径，按需计算 + 30s 进程内缓存 + dashboard_stats 落表）
 - 会话记录：`/api/sessions` 列表筛选（时间/意图/状态/转人工/关键词/标注）+ 详情（trace/工单/标注）+ `/annotations` 标注回流评测候选
+
+## B6a 系统设置交付范围
+
+- 模型配置：CRUD/测试连通/按用途默认切换（对话/Embedding/重排），API Key 加密存储 + 脱敏
+- 配置接口：`/api/settings/prompt|escalation|chunking`（对话链路与分块参数运行时读取）
+- 用户管理：`POST/PUT /api/auth/users`、`PUT /api/auth/users/{id}/password`；知识库可见性（all/role/user）
+- 审计：`GET /api/audit-logs`；数据管理：`POST /api/admin/rebuild-vectors`、`GET /api/admin/export`

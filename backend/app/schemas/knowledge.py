@@ -41,6 +41,14 @@ class KnowledgeBaseUpdate(BaseModel):
     visible_user_ids: list[str] | None = Field(default=None)
 
 
+class KnowledgeBaseVisibilityUpdate(BaseModel):
+    """知识库可见范围配置（B6a 账号权限 Tab，00 §3 新增）。"""
+
+    visibility: str = Field(pattern="^(all|role|user)$")
+    visible_roles: list[str] = Field(default_factory=list)
+    visible_user_ids: list[str] = Field(default_factory=list)
+
+
 class KnowledgeBaseOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -48,6 +56,9 @@ class KnowledgeBaseOut(BaseModel):
     name: str
     description: str
     doc_count: int = 0
+    visibility: str = "all"
+    visible_roles: list[str] = Field(default_factory=list)
+    visible_user_ids: list[str] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
 
@@ -61,6 +72,9 @@ class KnowledgeBaseDetailOut(BaseModel):
     name: str
     description: str
     created_by: uuid.UUID | None = None
+    visibility: str = "all"
+    visible_roles: list[str] = Field(default_factory=list)
+    visible_user_ids: list[str] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
 
