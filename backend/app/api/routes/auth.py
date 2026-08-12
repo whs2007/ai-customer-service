@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db, require_roles
+from app.core.exceptions import BadRequestError
 from app.core.response import PageData, ResponseModel, ok
 from app.models.user import Role, User
 from app.schemas.auth import (
@@ -104,8 +105,6 @@ async def update_user_endpoint(
     admin: User = Depends(require_roles(Role.ADMIN)),
     db: AsyncSession = Depends(get_db),
 ) -> ResponseModel:
-    from app.core.exceptions import BadRequestError
-
     if str(admin.id) == user_id and payload.status and payload.status.value == "disabled":
         raise BadRequestError("不能停用当前登录账号")
     user = await update_user(db, user_id, payload)

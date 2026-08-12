@@ -12,6 +12,7 @@ from app.core.response import PageData, ResponseModel, ok
 from app.models.user import Role, User
 from app.schemas.knowledge import ChunkCreate, ChunkOut, ChunkUpdate
 from app.services import chunk_service, document_service
+from app.services import knowledge_service
 
 router = APIRouter(tags=["chunks"])
 
@@ -21,10 +22,11 @@ async def list_chunks(
     doc_id: uuid.UUID,
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=10, ge=1, le=100),
-    _: User = Depends(require_roles(Role.ADMIN, Role.AGENT)),
+    user: User = Depends(require_roles(Role.ADMIN, Role.AGENT)),
     db: AsyncSession = Depends(get_db),
 ) -> ResponseModel:
-    await document_service.get_document(db, doc_id)
+    doc = await document_service.get_document(db, doc_id)
+    await knowledge_service.ensure_kb_accessible(db, doc.kb_id, user)
     items, total = await chunk_service.list_chunks(db, doc_id, page, page_size)
     return ok(
         data=PageData[ChunkOut](
@@ -75,4 +77,3 @@ async def delete_chunk(
 ) -> ResponseModel:
     await chunk_service.delete_chunk(db, chunk_id)
     return ok(message="删除成功")
-

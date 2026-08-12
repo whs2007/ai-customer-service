@@ -191,6 +191,8 @@ export default function ChatPage() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<UiMessage[]>([]);
   const [citations, setCitations] = useState<Citation[]>([]);
+  // 引用所属消息 id：反馈必须绑定到展示该引用的消息（P2-4 修复）
+  const [citationMessageId, setCitationMessageId] = useState<string | null>(null);
   const [kbIds, setKbIds] = useState<string[]>([]);
   const [modelProfiles, setModelProfiles] = useState<ModelProfile[]>([]);
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
@@ -259,6 +261,7 @@ export default function ChatPage() {
         .reverse()
         .find((m) => m.role === 'assistant' && (m.citations ?? []).length > 0);
       setCitations(lastCited?.citations ?? []);
+      setCitationMessageId(lastCited?.id ?? null);
       setStreaming(false);
     } catch (err) {
       message.error(err instanceof ApiError ? err.message : '会话加载失败');
@@ -270,6 +273,7 @@ export default function ChatPage() {
     setSessionId(null);
     setMessages([]);
     setCitations([]);
+    setCitationMessageId(null);
     setStreaming(false);
   };
 
@@ -331,6 +335,7 @@ export default function ChatPage() {
         );
       } else if (ev.event === 'citations') {
         setCitations(ev.data.citations);
+        setCitationMessageId(null);
         setMessages((msgs) =>
           msgs.map((m) =>
             m.id === 'streaming' ? { ...m, citations: ev.data.citations } : m,
@@ -339,6 +344,7 @@ export default function ChatPage() {
       } else if (ev.event === 'done') {
         if (ev.data.message_id) {
           messageIdRef.current = ev.data.message_id;
+          setCitationMessageId(ev.data.message_id);
         }
         setMessages((msgs) => {
           // 转人工等无回答文本时（message_id 为空）：移除空的 streaming 气泡
@@ -423,14 +429,15 @@ export default function ChatPage() {
     citation: Citation,
     reason?: string,
   ) => {
-    if (!messageIdRef.current || !sessionId) {
+    const targetMessageId = citationMessageId ?? messageIdRef.current;
+    if (!targetMessageId || !sessionId) {
       message.warning('当前回答尚未完成，请稍后操作');
       return;
     }
     try {
       await createFeedback({
         session_id: sessionId,
-        message_id: messageIdRef.current,
+        message_id: targetMessageId,
         chunk_id: citation.chunk_id,
         action,
         reason,
@@ -440,7 +447,7 @@ export default function ChatPage() {
         setCitations((list) => list.filter((c) => c.chunk_id !== citation.chunk_id));
         setMessages((msgs) =>
           msgs.map((m) =>
-            m.id === messageIdRef.current
+            m.id === targetMessageId
               ? {
                   ...m,
                   citations: (m.citations ?? []).filter(

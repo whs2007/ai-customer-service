@@ -30,10 +30,10 @@ async def list_documents(
     keyword: str | None = Query(default=None, max_length=100, description="文件名关键词"),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=10, ge=1, le=100),
-    _: User = Depends(require_roles(Role.ADMIN, Role.AGENT)),
+    user: User = Depends(require_roles(Role.ADMIN, Role.AGENT)),
     db: AsyncSession = Depends(get_db),
 ) -> ResponseModel:
-    await knowledge_service.get_knowledge_base(db, kb_id)
+    await knowledge_service.ensure_kb_accessible(db, kb_id, user)
     items, total = await document_service.list_documents(
         db, kb_id, keyword=keyword, page=page, page_size=page_size
     )
@@ -106,10 +106,11 @@ async def upload_document(
 @router.get("/documents/{doc_id}", response_model=ResponseModel[DocumentOut])
 async def get_document(
     doc_id: uuid.UUID,
-    _: User = Depends(require_roles(Role.ADMIN, Role.AGENT)),
+    user: User = Depends(require_roles(Role.ADMIN, Role.AGENT)),
     db: AsyncSession = Depends(get_db),
 ) -> ResponseModel:
     doc = await document_service.get_document(db, doc_id)
+    await knowledge_service.ensure_kb_accessible(db, doc.kb_id, user)
     return ok(data=DocumentOut.model_validate(doc))
 
 

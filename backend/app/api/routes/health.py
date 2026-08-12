@@ -14,6 +14,9 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import PlainTextResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import require_roles
+from app.models.user import Role, User
+
 router = APIRouter(tags=["health"])
 
 
@@ -48,8 +51,11 @@ async def health_check(
 
 
 @router.get("/metrics")
-async def metrics() -> PlainTextResponse:
-    """Prometheus 指标（08 §9）；同时执行日志告警检查（占位）。"""
+async def metrics(
+    _: User = Depends(require_roles(Role.ADMIN)),
+) -> PlainTextResponse:
+    """Prometheus 指标（08 §9，仅 admin，Prometheus 抓取需配置 Bearer token）；
+    同时执行日志告警检查（占位）。"""
     from app.core.redis import get_redis_client
 
     # 队列积压：celery 模式读 Redis 默认队列长度；inline 模式为 0

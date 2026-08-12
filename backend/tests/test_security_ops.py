@@ -187,9 +187,138 @@ async def test_injection_chat_blocked(client: AsyncClient, admin_headers):
 
 
 @pytest.mark.asyncio
-async def test_metrics_endpoint(client: AsyncClient):
+async def test_metrics_endpoint(client: AsyncClient, admin_headers):
     await client.get("/health")
-    resp = await client.get("/metrics")
+    resp = await client.get("/metrics", headers=admin_headers)
     assert resp.status_code == 200
     assert "text/plain" in resp.headers["content-type"]
     assert "http_requests_total" in resp.text
+    # 非 admin 不可访问
+    forbidden = await client.get("/metrics")
+    assert forbidden.status_code in (401, 403)
+
+
+@pytest.mark.asyncio
+async def test_ticket_cited_from_history(client: AsyncClient, admin_headers):
+    """P1-1：转人工工单携带会话历史命中片段（先政策后投诉）。"""
+    kb = (
+        await client.post(
+            "/api/knowledge-bases",
+            headers=admin_headers,
+            json={"name": f"TCITED_{uuid.uuid4().hex[:8]}", "description": ""},
+        )
+    ).json()["data"]
+    with SAMPLE_XLSX.open("rb") as f:
+        up = await client.post(
+            f"/api/knowledge-bases/{kb['id']}/documents",
+            headers=admin_headers,
+            files={"file": ("FAQ知识库导入模板.xlsx", f, "application/octet-stream")},
+        )
+    await _wait_document(client, admin_headers, up.json()["data"]["document_id"])
+
+    first = None
+    async with client.stream(
+        "POST",
+        "/api/chat",
+        headers=admin_headers,
+        json={"kb_ids": [kb["id"]], "message": "商品签收后几天可以退货？"},
+    ) as resp:
+        for line in [l.strip() async for l in resp.aiter_lines()]:
+            if line.startswith("data:") and "intent" in line:
+                first = json.loads(line[5:].strip())
+    assert first["intent"] == "policy_query"
+
+    second = None
+    async with client.stream(
+        "POST",
+        "/api/chat",
+        headers=admin_headers,
+        json={
+            "session_id": first["session_id"],
+            "kb_ids": [kb["id"]],
+            "message": "我要投诉！",
+        },
+    ) as resp:
+        for line in [l.strip() async for l in resp.aiter_lines()]:
+            if line.startswith("data:") and "ticket_no" in line:
+                second = json.loads(line[5:].strip())
+    assert second["ticket_no"]
+
+    tickets = (
+        await client.get(
+            f"/api/tickets?keyword={second['ticket_no']}", headers=admin_headers
+        )
+    ).json()["data"]["items"]
+    detail = (
+        await client.get(f"/api/tickets/{tickets[0]['id']}", headers=admin_headers)
+    ).json()["data"]
+    assert len(detail["citations"]) >= 1
+    assert detail["citations"][0]["chunk_id"]
+
+
+@pytest.mark.asyncio
+async def test_kb_detail_visibility_enforced(
+    client: AsyncClient, admin_headers, db_session
+):
+    """P1-2：详情/文档/Chunk 读取同样按资源级可见性校验（agent 越权 403）。"""
+    suffix = uuid.uuid4().hex[:6]
+    ua = (
+        await client.post(
+            "/api/auth/users",
+            headers=admin_headers,
+            json={"username": f"vd_a_{suffix}", "password": "pass123456", "display_name": "A", "role": "agent"},
+        )
+    ).json()["data"]
+    headers_a = {
+        "Authorization": "Bearer "
+        + (
+            await client.post(
+                "/api/auth/login", json={"username": f"vd_a_{suffix}", "password": "pass123456"}
+            )
+        ).json()["data"]["access_token"]
+    }
+
+    kb = (
+        await client.post(
+            "/api/knowledge-bases",
+            headers=admin_headers,
+            json={"name": f"VD_{suffix}", "description": ""},
+        )
+    ).json()["data"]
+    with SAMPLE_XLSX.open("rb") as f:
+        up = await client.post(
+            f"/api/knowledge-bases/{kb['id']}/documents",
+            headers=admin_headers,
+            files={"file": ("FAQ知识库导入模板.xlsx", f, "application/octet-stream")},
+        )
+    doc = await _wait_document(client, admin_headers, up.json()["data"]["document_id"])
+
+    # 可见性设为 user（仅 admin）
+    vis_body = {
+        "name": kb["name"],
+        "description": "",
+        "visibility": "user",
+        "visible_user_ids": [],
+    }
+    await client.put(
+        f"/api/knowledge-bases/{kb['id']}",
+        headers=admin_headers,
+        json=vis_body,
+    )
+
+    assert (await client.get(f"/api/knowledge-bases/{kb['id']}", headers=headers_a)).status_code == 403
+    assert (
+        await client.get(f"/api/knowledge-bases/{kb['id']}/documents", headers=headers_a)
+    ).status_code == 403
+    assert (
+        await client.get(f"/api/documents/{doc['id']}/chunks", headers=headers_a)
+    ).status_code == 403
+
+    # 加入可见用户后放行
+    vis_body["visible_user_ids"] = [str(ua["id"])]
+    await client.put(
+        f"/api/knowledge-bases/{kb['id']}",
+        headers=admin_headers,
+        json=vis_body,
+    )
+    assert (await client.get(f"/api/knowledge-bases/{kb['id']}", headers=headers_a)).status_code == 200

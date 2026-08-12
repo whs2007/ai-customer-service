@@ -42,10 +42,10 @@ async def create_knowledge_base(
 @router.get("/{kb_id}", response_model=ResponseModel[KnowledgeBaseDetailOut])
 async def get_knowledge_base(
     kb_id: uuid.UUID,
-    _: User = Depends(require_roles(Role.ADMIN, Role.AGENT)),
+    user: User = Depends(require_roles(Role.ADMIN, Role.AGENT)),
     db: AsyncSession = Depends(get_db),
 ) -> ResponseModel:
-    kb = await knowledge_service.get_knowledge_base(db, kb_id)
+    kb = await knowledge_service.ensure_kb_accessible(db, kb_id, user)
     return ok(data=KnowledgeBaseDetailOut.model_validate(kb))
 
 

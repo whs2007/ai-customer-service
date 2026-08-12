@@ -25,7 +25,7 @@ router = APIRouter(prefix="/settings", tags=["settings"])
 
 @router.get("/intent", response_model=ResponseModel)
 async def get_intent_rules(
-    _: User = Depends(require_roles(Role.ADMIN, Role.AGENT)),
+    _: User = Depends(require_roles(Role.ADMIN)),
     db: AsyncSession = Depends(get_db),
 ) -> ResponseModel:
     rules = await settings_service.get_intent_rules(db)

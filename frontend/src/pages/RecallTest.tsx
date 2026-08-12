@@ -115,17 +115,16 @@ export default function RecallTest() {
     [kbIds, query, topK, tags, mode],
   );
 
-  // TopK / 知识库 / 标签 / 检索方式变化后自动重新检索（05 §6）
+  // TopK / 知识库 / 标签 / 检索方式 / 问题变化后防抖自动重新检索（05 §6）
   useEffect(() => {
-    if (query.trim() && kbIds.length > 0) {
-      void search();
-    }
+    if (!query.trim() || kbIds.length === 0) return;
+    const timer = setTimeout(() => void search(), 300);
+    return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [kbIds, topK, tags, mode]);
+  }, [kbIds, topK, tags, mode, query]);
 
   const fillSample = (sample: string) => {
     setQuery(sample);
-    void search(sample);
   };
 
   // 重排前后对比（05 §4.3 建议视图）：按 retrieval_score 计算的原始名次

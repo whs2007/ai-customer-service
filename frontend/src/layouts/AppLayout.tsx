@@ -46,16 +46,25 @@ export default function AppLayout() {
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
 
+  // 菜单级权限（00 §3）：admin 全部；agent 隐藏设置/评测；viewer 仅工作台与帮助
+  const visibleItems = MENU_ITEMS.filter((item) => {
+    if (user?.role === 'admin') return true;
+    if (user?.role === 'agent') {
+      return !['/evaluation', '/settings'].includes(item.key);
+    }
+    return ['/dashboard', '/help'].includes(item.key);
+  });
+
   const selectedKey = useMemo(() => {
-    const match = MENU_ITEMS.find(
+    const match = visibleItems.find(
       (item) => location.pathname === item.key || location.pathname.startsWith(`${item.key}/`),
     );
     return match?.key ?? '/dashboard';
-  }, [location.pathname]);
+  }, [location.pathname, visibleItems]);
 
   const pageTitle = useMemo(
-    () => MENU_ITEMS.find((item) => item.key === selectedKey)?.label ?? '工作台',
-    [selectedKey],
+    () => visibleItems.find((item) => item.key === selectedKey)?.label ?? '工作台',
+    [selectedKey, visibleItems],
   );
 
   const userMenu = {
@@ -90,7 +99,7 @@ export default function AppLayout() {
         <Menu
           mode="inline"
           selectedKeys={[selectedKey]}
-          items={MENU_ITEMS.map(({ key, icon, label }) => ({
+          items={visibleItems.map(({ key, icon, label }) => ({
             key,
             icon,
             label,
@@ -129,4 +138,3 @@ export default function AppLayout() {
     </Layout>
   );
 }
-

@@ -9,7 +9,7 @@ from sqlalchemy import and_, delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import ConflictError, NotFoundError
+from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError
 from app.models.chunk import Chunk
 from app.models.document import Document
 from app.models.knowledge_base import KnowledgeBase
@@ -59,6 +59,18 @@ async def get_knowledge_base(db: AsyncSession, kb_id: uuid.UUID) -> KnowledgeBas
     kb = await db.get(KnowledgeBase, kb_id)
     if kb is None or kb.deleted_at is not None:
         raise NotFoundError("知识库不存在")
+    return kb
+
+
+async def ensure_kb_accessible(
+    db: AsyncSession, kb_id: uuid.UUID, user: User | None = None
+) -> KnowledgeBase:
+    """读取前资源级可见性校验（00 §3 / 08 §8 数据隔离）：admin 全见，
+    agent/viewer 按 all/role/user 过滤，越权抛 40300。"""
+    kb = await get_knowledge_base(db, kb_id)
+    if user is not None and user.role != "admin":
+        if not _kb_visible(user, kb.visibility, kb.visible_roles, kb.visible_user_ids):
+            raise ForbiddenError("无权限访问该知识库")
     return kb
 
 

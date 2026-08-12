@@ -7,12 +7,15 @@ import time
 import uuid
 from typing import Any
 
+from sqlalchemy import select
+
 from app.agents.intent import classify_intent as classify_by_rules
 from app.agents.llm import LLMClient
 from app.agents.state import ChatState
 from app.agents.tools import create_ticket, lookup_order_mock
 from app.core.config import get_settings
 from app.db.session import get_session_factory
+from app.models.message import Message
 from app.models.ticket import TicketPriority
 from app.rag.retriever import run_retrieval_test
 from app.services.settings_service import (
@@ -208,13 +211,31 @@ async def escalate(state: ChatState) -> dict:
         priority = escalation.priority_rules.get(
             state.get("intent", "other"), TicketPriority.MEDIUM.value
         )
+        # 历史命中片段：转人工前会话内最近 assistant 消息的引用（06 §6 工单记录知识库命中）
+        history_rows = (
+            await db.execute(
+                select(Message.cited_chunk_ids)
+                .where(
+                    Message.session_id == uuid.UUID(state["session_id"]),
+                    Message.role == "assistant",
+                )
+                .order_by(Message.created_at.desc())
+                .limit(5)
+            )
+        ).scalars().all()
+        cited_ids = [str(c["chunk_id"]) for c in citations]
+        for row in history_rows:
+            for cid_raw in (row or []):
+                s = str(cid_raw)
+                if s not in cited_ids:
+                    cited_ids.append(s)
         ticket = await create_ticket(
             db,
             session_id=uuid.UUID(state["session_id"]),
             content=content,
             user_id=uuid.UUID(state["user_id"]) if state.get("user_id") else None,
             priority=priority,
-            cited_chunk_ids=[str(c["chunk_id"]) for c in citations],
+            cited_chunk_ids=cited_ids[:20],
         )
     ticket_dict: dict[str, Any] = {
         "id": str(ticket.id),
