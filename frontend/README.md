@@ -30,6 +30,7 @@ npm run dev
 - `src/stores/auth.ts`：认证状态（zustand + persist）
 - `src/pages/knowledge/`：B2 知识库三页面（列表/创建、文档列表、Chunk 管理）
 - `src/pages/RecallTest.tsx`：B3 检索测试页（多库/标签/模式/TopK、召回卡片、重排前后对比、示例问题）
+- `src/pages/Chat.tsx`：B4 智能客服页（SSE 流式、引用面板与反馈、对话内表单、模型下拉、会话恢复）
 
 ## 里程碑对应
 
