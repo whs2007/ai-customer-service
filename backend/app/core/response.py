@@ -28,4 +28,3 @@ class PageData(BaseModel, Generic[T]):
 
 def ok(data: Any = None, message: str = "ok") -> ResponseModel:
     return ResponseModel(code=0, message=message, data=data)
-

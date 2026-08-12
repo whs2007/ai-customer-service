@@ -5,10 +5,13 @@ from __future__ import annotations
 from sqlalchemy import text
 
 from app.api.deps import get_db
+from app.core.alerts import check_alerts
 from app.core.config import get_settings
+from app.core.metrics import QUEUE_LAG, render_metrics
 from app.core.response import ResponseModel, ok
 from app.core.redis import ping_redis
 from fastapi import APIRouter, Depends
+from fastapi.responses import PlainTextResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(tags=["health"])
@@ -42,3 +45,22 @@ async def health_check(
             "components": components,
         }
     )
+
+
+@router.get("/metrics")
+async def metrics() -> PlainTextResponse:
+    """Prometheus 指标（08 §9）；同时执行日志告警检查（占位）。"""
+    from app.core.redis import get_redis_client
+
+    # 队列积压：celery 模式读 Redis 默认队列长度；inline 模式为 0
+    redis_client = get_redis_client()
+    lag = 0
+    if redis_client is not None:
+        try:
+            lag = await redis_client.llen("celery")
+        except Exception:  # noqa: BLE001
+            lag = 0
+    QUEUE_LAG.set(lag)
+    check_alerts()
+    body, content_type = render_metrics()
+    return PlainTextResponse(body, media_type=content_type)

@@ -27,6 +27,7 @@ from app.schemas.evaluation import (
 )
 from app.services import model_profile_service
 from app.services.judge_service import PASS_THRESHOLD, judge_answer
+from app.core.metrics import TASK_FAILURES
 
 logger: structlog.stdlib.BoundLogger = structlog.get_logger(__name__)
 
@@ -326,6 +327,7 @@ async def run_eval_task(task_id: str) -> None:
                 score_avg=avg,
             )
         except Exception as exc:  # noqa: BLE001
+            TASK_FAILURES.labels(kind="evaluation").inc()
             await db.rollback()
             task = await db.get(EvalTask, uuid.UUID(task_id))
             if task is not None:
@@ -516,4 +518,3 @@ async def reject_candidate(db: AsyncSession, candidate_id: uuid.UUID) -> None:
         raise NotFoundError("候选不存在或已处理")
     candidate.status = EvalCandidateStatus.REJECTED.value
     await db.commit()
-

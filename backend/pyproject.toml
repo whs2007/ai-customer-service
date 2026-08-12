@@ -26,6 +26,8 @@ dependencies = [
     "celery>=5.4",
     "python-multipart>=0.0.9",
     "langgraph>=0.2",
+    "cryptography>=42",
+    "prometheus-client>=0.20",
 ]
 
 [project.optional-dependencies]

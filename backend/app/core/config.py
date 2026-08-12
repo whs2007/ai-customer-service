@@ -66,6 +66,16 @@ class Settings(BaseSettings):
     rerank_base_url: str = ""
     rerank_model: str = ""
 
+    # 安全加固（08 §8，B6b）
+    scan_enabled: bool = False  # 恶意文件扫描（可插拔，默认关闭；接入点见 pipeline/scanner.py）
+    moderation_enabled: bool = True  # 内容审核（本地敏感词兜底；配置 API 后优先外部审核）
+    moderation_api_url: str = ""
+    moderation_api_key: str = ""
+
+    # 可观测（08 §9，B6b）
+    metrics_enabled: bool = True  # Prometheus 指标 /metrics
+    log_retention_days: int = 30  # 日志保留策略（天），清理任务后续实现
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def parse_cors_origins(cls, v: object) -> object:

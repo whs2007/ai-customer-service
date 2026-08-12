@@ -151,7 +151,7 @@ async def test_upload_corrupt_file_fails(client: AsyncClient, admin_headers):
     resp = await client.post(
         f"/api/knowledge-bases/{kb['id']}/documents",
         headers=admin_headers,
-        files={"file": ("bad.xlsx", io.BytesIO(b"this is not an xlsx"), "application/octet-stream")},
+        files={"file": ("bad.xlsx", io.BytesIO(b"PK\x03\x04corrupted-content"), "application/octet-stream")},
     )
     doc_id = resp.json()["data"]["document_id"]
     doc = await _wait_document(client, admin_headers, doc_id)

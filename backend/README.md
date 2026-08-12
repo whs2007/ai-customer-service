@@ -165,3 +165,11 @@ curl -N -X POST http://127.0.0.1:8000/api/chat \
 - 配置接口：`/api/settings/prompt|escalation|chunking`（对话链路与分块参数运行时读取）
 - 用户管理：`POST/PUT /api/auth/users`、`PUT /api/auth/users/{id}/password`；知识库可见性（all/role/user）
 - 审计：`GET /api/audit-logs`；数据管理：`POST /api/admin/rebuild-vectors`、`GET /api/admin/export`
+
+## B6b 部署与安全加固交付范围
+
+- 一键启动：`cp .env.example .env`（docker 模式 DATABASE_URL/REDIS_URL 用服务名、TASK_BACKEND=celery）→ `docker compose up -d --build`
+  - 五服务：postgres(pgvector) / redis / api（自动 alembic upgrade）/ worker（Celery）/ frontend（nginx 静态托管 + /api 反代，8080 端口）
+- 安全：上传内容嗅探（拒绝伪装扩展名）+ 可插拔病毒扫描（默认关闭）；API Key Fernet 加密（JWT_SECRET 派生，旧数据懒迁移）；内容审核可插拔（本地敏感词兜底）
+- 可观测：`GET /metrics`（Prometheus：HTTP 延迟/错误、LLM token/成本、检索 P95、队列积压）；日志告警占位；`LOG_RETENTION_DAYS` 可配置
+- 性能抽测：`python scripts/perf_smoke.py --concurrency 50 --retrieval 30`

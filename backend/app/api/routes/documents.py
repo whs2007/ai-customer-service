@@ -14,6 +14,7 @@ from app.core.exceptions import BadRequestError
 from app.core.response import PageData, ResponseModel, ok
 from app.models.user import Role, User
 from app.pipeline.parser import ALLOWED_EXTENSIONS, MAX_FILE_SIZE
+from app.pipeline.scanner import scan_file, sniff_content
 from app.schemas.knowledge import DocumentOut, UploadDocumentOut
 from app.services import document_service, knowledge_service
 
@@ -71,6 +72,9 @@ async def upload_document(
         raise BadRequestError("文件大小不能超过 20MB")
     if not content:
         raise BadRequestError("文件内容为空")
+    # 内容嗅探：拒绝伪装扩展名（08 §8 上传安全）
+    if not sniff_content(ext, content):
+        raise BadRequestError("文件内容与扩展名不匹配，疑似伪装文件")
 
     settings = get_settings()
     storage_dir = Path(settings.storage_dir).resolve()
@@ -78,6 +82,12 @@ async def upload_document(
     target_dir.mkdir(parents=True, exist_ok=True)
     file_path = target_dir / f"{uuid.uuid4().hex}{ext}"
     file_path.write_bytes(content)
+
+    # 恶意文件扫描（可插拔，默认关闭；接入点见 pipeline/scanner.py）
+    scan_result = scan_file(file_path, ext.lstrip("."))
+    if not scan_result.ok:
+        file_path.unlink(missing_ok=True)
+        raise BadRequestError(scan_result.reason)
 
     doc = await document_service.create_document_record(
         db, kb_id, file_name, len(content), str(file_path)

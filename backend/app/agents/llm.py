@@ -14,6 +14,7 @@ import httpx
 import structlog
 
 from app.core.config import Settings, get_settings
+from app.core.metrics import LLM_CALLS, LLM_COST, LLM_FAILURES, LLM_TOKENS
 
 logger: structlog.stdlib.BoundLogger = structlog.get_logger(__name__)
 
@@ -55,6 +56,9 @@ class LLMClient:
             "temperature": temperature,
         }
         headers = {"Authorization": f"Bearer {self.settings.llm_api_key}"}
+        model_name = model or self.settings.llm_model
+        LLM_CALLS.labels(provider=self.settings.llm_provider, model=model_name).inc()
+        tokens = 0
         try:
             async with httpx.AsyncClient(timeout=60) as client:
                 async with client.stream(
@@ -72,9 +76,15 @@ class LLMClient:
                         except (KeyError, IndexError, json.JSONDecodeError):
                             continue
                         if delta:
+                            tokens += len(delta) // 4 + 1
                             yield delta
+            LLM_TOKENS.labels(kind="completion").inc(tokens)
+            # 成本估算（近似单价，元/token；可按模型单价表细化，08 §9）
+            LLM_COST.labels(currency="CNY").inc(tokens * 0.000001)
         except Exception as exc:  # noqa: BLE001
             # 日志不记录 Key
             logger.exception("llm_api_error", url=url, model=model or self.settings.llm_model)
+            LLM_FAILURES.labels(
+                provider=self.settings.llm_provider, model=model_name
+            ).inc()
             raise
-

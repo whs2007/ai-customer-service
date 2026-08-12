@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 import uuid
 
 from sqlalchemy import select
@@ -14,6 +15,7 @@ from app.models.user import Role, User
 from app.rag.embeddings import EmbeddingClient
 from app.rag.reranker import RerankClient
 from app.rag.vector_store import keyword_search, vector_search
+from app.core.metrics import RETRIEVAL_DURATION, RETRIEVAL_REQUESTS
 
 RRF_K = 60  # RRF 常数（08 §4.3）
 RERANK_TOP_N = 20  # 重排候选数（建议 20）
@@ -87,6 +89,8 @@ async def run_retrieval_test(
     user: User | None = None,
 ) -> dict:
     """检索测试主流程，返回 hits 与生效模式。"""
+    started = time.perf_counter()
+    RETRIEVAL_REQUESTS.inc()
     accessible = await filter_accessible_kb_ids(db, kb_ids, user)
     if not accessible:
         raise BadRequestError("所选知识库无效或无权限")
@@ -130,7 +134,7 @@ async def run_retrieval_test(
                 fused.sort(key=lambda r: r["retrieval_score"], reverse=True)
             hits = fused[:top_k]
 
-    return {
+    data = {
         "query": query,
         "top_k": top_k,
         "retriever_mode": retriever_mode,
@@ -138,3 +142,6 @@ async def run_retrieval_test(
         "rerank_skipped": rerank_skipped,
         "hits": hits,
     }
+    # 耗时埋点（P95 由 /metrics 直方图提供，08 §9）
+    RETRIEVAL_DURATION.observe(time.perf_counter() - started)
+    return data

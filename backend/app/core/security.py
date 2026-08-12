@@ -9,6 +9,7 @@ from typing import Any
 
 import bcrypt
 import jwt
+from cryptography.fernet import Fernet, InvalidToken
 
 from app.core.config import get_settings
 from app.core.exceptions import TokenExpiredError, UnauthorizedError
@@ -82,32 +83,64 @@ def decode_token(token: str, expected_type: str | None = None) -> dict[str, Any]
     return payload
 
 
-def _xor_key() -> bytes:
+def _fernet_key() -> bytes:
+    """Fernet 密钥：由 JWT_SECRET 派生（SHA-256 → urlsafe base64，32 字节）。"""
+    secret = get_settings().jwt_secret.encode("utf-8")
+    digest = hashlib.sha256(secret).digest()
+    return base64.urlsafe_b64encode(digest)
+
+
+def _legacy_xor_key() -> bytes:
+    """旧版轻量混淆密钥（兼容迁移用，B6b 前写入的数据）。"""
     secret = get_settings().jwt_secret.encode("utf-8")
     return hashlib.sha256(secret).digest()
 
 
-def encrypt_secret(plain: str) -> str:
-    """密钥加密：XOR + Base64（08 §4.7 API Key 加密存储）。
-
-    【说明】轻量混淆（标准库实现，无额外依赖）；正式加密（Fernet/KMS）按文档规划留 B6。
-    """
-    if not plain:
-        return ""
-    key = _xor_key()
-    data = plain.encode("utf-8")
-    out = bytes(b ^ key[i % len(key)] for i, b in enumerate(data))
-    return base64.urlsafe_b64encode(out).decode("ascii")
-
-
-def decrypt_secret(enc: str) -> str:
-    """密钥解密：Base64 + XOR。非法密文返回空串（避免崩溃）。"""
-    if not enc:
-        return ""
+def _legacy_xor_decrypt(enc: str) -> str:
     try:
         data = base64.urlsafe_b64decode(enc.encode("ascii"))
     except Exception:  # noqa: BLE001
         return ""
-    key = _xor_key()
+    key = _legacy_xor_key()
     out = bytes(b ^ key[i % len(key)] for i, b in enumerate(data))
     return out.decode("utf-8", errors="ignore")
+
+
+def encrypt_secret(plain: str) -> str:
+    """密钥加密：Fernet 对称加密（08 §8，密钥派生自 JWT_SECRET）。"""
+    if not plain:
+        return ""
+    return Fernet(_fernet_key()).encrypt(plain.encode("utf-8")).decode("ascii")
+
+
+def decrypt_secret(enc: str) -> str:
+    """密钥解密：Fernet 优先，兼容旧版 XOR 密文（B6b 前数据）。"""
+    if not enc:
+        return ""
+    try:
+        return Fernet(_fernet_key()).decrypt(enc.encode("ascii")).decode("utf-8")
+    except InvalidToken:
+        # 旧版 XOR 混淆兼容
+        return _legacy_xor_decrypt(enc)
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+def is_legacy_secret(enc: str) -> bool:
+    """判断是否为旧版 XOR 混淆密文（Fernet 无法解密但 XOR 可解）。"""
+    if not enc:
+        return False
+    try:
+        Fernet(_fernet_key()).decrypt(enc.encode("ascii"))
+        return False
+    except InvalidToken:
+        return bool(_legacy_xor_decrypt(enc))
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def reencrypt_secret(enc: str) -> str:
+    """旧格式密文重加密为 Fernet；已是 Fernet 或空则原样返回。"""
+    if is_legacy_secret(enc):
+        return encrypt_secret(_legacy_xor_decrypt(enc))
+    return enc

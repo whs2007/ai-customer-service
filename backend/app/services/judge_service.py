@@ -13,6 +13,7 @@ import httpx
 import structlog
 
 from app.core.config import Settings, get_settings
+from app.core.metrics import LLM_CALLS, LLM_FAILURES, LLM_TOKENS
 
 logger: structlog.stdlib.BoundLogger = structlog.get_logger(__name__)
 
@@ -69,6 +70,8 @@ async def _judge_via_llm(
         f"问题：{question}\n期望答案：{expected}\n模型回答：{answer}"
     )
     base_url = (settings.llm_base_url or "https://open.bigmodel.cn/api/paas/v4").rstrip("/")
+    model_name = model_name or settings.llm_model
+    LLM_CALLS.labels(provider=settings.llm_provider, model=model_name).inc()
     try:
         async with httpx.AsyncClient(timeout=30) as client:
             resp = await client.post(
@@ -82,11 +85,13 @@ async def _judge_via_llm(
             )
             resp.raise_for_status()
             content = resp.json()["choices"][0]["message"]["content"]
+        LLM_TOKENS.labels(kind="prompt").inc(len(prompt) // 4 + 1)
+        LLM_TOKENS.labels(kind="completion").inc(len(content) // 4 + 1)
         match = re.search(r"(\d{1,3})", content)
         if match:
             return max(0.0, min(100.0, float(match.group(1))))
     except Exception as exc:  # noqa: BLE001
         # 日志不记录 Key；打分失败回退启发式，保证评测可完成
         logger.warning("judge_llm_fallback", error=str(exc)[:200])
+        LLM_FAILURES.labels(provider=settings.llm_provider, model=model_name).inc()
     return None
-

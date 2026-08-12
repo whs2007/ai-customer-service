@@ -15,6 +15,7 @@ from app.agents.graph import chat_graph
 from app.agents.safety import check_prompt_injection
 from app.agents.state import ChatState
 from app.api.deps import require_roles
+from app.core.moderation import check_text
 from app.models.user import Role, User
 from app.rag.retriever import filter_accessible_kb_ids
 from app.schemas.chat import ChatRequest
@@ -128,6 +129,11 @@ async def _run_chat_pipeline(
 
             # 转人工/投诉等无文本回答时不落空 assistant 消息（避免空气泡）
             answer = (result.get("answer") or "").strip()
+            # 内容审核（08 §8：回答过审，命中替换为安全话术）
+            if answer:
+                moderation = await check_text(db, answer)
+                if moderation["blocked"]:
+                    answer = "抱歉，该内容暂无法回答。"
             assistant = None
             if answer:
                 assistant = await session_service.append_message(

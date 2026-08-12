@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import BadRequestError, ConflictError, NotFoundError
-from app.core.security import decrypt_secret, encrypt_secret
+from app.core.security import decrypt_secret, encrypt_secret, is_legacy_secret, reencrypt_secret
 from app.models.model_profile import ModelProfile
 from app.schemas.chat import (
     ModelProfileCreate,
@@ -39,6 +39,8 @@ async def list_profiles(db: AsyncSession) -> list[ModelProfileOut]:
     result = await db.execute(
         select(ModelProfile).order_by(ModelProfile.created_at)
     )
+    profiles = list(result.scalars().all())
+    await _migrate_legacy_keys(db, profiles)
     return [
         ModelProfileOut(
             id=p.id,
@@ -54,7 +56,7 @@ async def list_profiles(db: AsyncSession) -> list[ModelProfileOut]:
             is_default=p.is_default,
             enabled=p.enabled,
         )
-        for p in result.scalars().all()
+        for p in profiles
     ]
 
 
@@ -72,7 +74,21 @@ async def get_profile(db: AsyncSession, profile_id: uuid.UUID) -> ModelProfile:
     profile = await db.get(ModelProfile, profile_id)
     if profile is None or not profile.enabled:
         raise NotFoundError("模型配置不存在或未启用")
+    await _migrate_legacy_keys(db, [profile])
     return profile
+
+
+async def _migrate_legacy_keys(
+    db: AsyncSession, profiles: list[ModelProfile]
+) -> None:
+    """懒迁移：旧版 XOR 混淆密文读取时重加密为 Fernet（B6b 兼容迁移）。"""
+    changed = False
+    for profile in profiles:
+        if profile.api_key_enc and is_legacy_secret(profile.api_key_enc):
+            profile.api_key_enc = reencrypt_secret(profile.api_key_enc)
+            changed = True
+    if changed:
+        await db.commit()
 
 
 async def set_default_profile(db: AsyncSession, profile_id: uuid.UUID) -> ModelProfile:

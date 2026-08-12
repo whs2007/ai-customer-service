@@ -15,6 +15,7 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 import structlog
+import time
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -42,6 +43,7 @@ from app.core.exceptions import AppError, InternalError
 from app.core.logging import configure_logging
 from app.core.response import ResponseModel
 from app.core.redis import close_redis, init_redis
+from app.core.metrics import HTTP_DURATION, HTTP_REQUESTS, normalize_path
 
 logger: structlog.stdlib.BoundLogger = structlog.get_logger(__name__)
 
@@ -112,11 +114,21 @@ def create_app() -> FastAPI:
                 method=request.method, path=request.url.path
             )
             logger.info("request_start")
+            started = time.perf_counter()
             try:
                 response = await call_next(request)
             except Exception:
                 logger.exception("request_error")
                 raise
+            duration = time.perf_counter() - started
+            HTTP_REQUESTS.labels(
+                method=request.method,
+                path=normalize_path(request.url.path),
+                status=str(response.status_code),
+            ).inc()
+            HTTP_DURATION.labels(
+                method=request.method, path=normalize_path(request.url.path)
+            ).observe(duration)
             response.headers["X-Request-ID"] = request_id
             logger.info(
                 "request_end", status_code=response.status_code

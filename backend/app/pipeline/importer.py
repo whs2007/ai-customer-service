@@ -14,7 +14,9 @@ from app.models.chunk import Chunk
 from app.models.document import Document
 from app.pipeline.parser import parse_document
 from app.rag.embeddings import EmbeddingClient
+from app.core.moderation import check_text
 from app.services.settings_service import get_chunking_config
+from app.core.metrics import TASK_FAILURES
 
 logger: structlog.stdlib.BoundLogger = structlog.get_logger(__name__)
 
@@ -41,6 +43,15 @@ async def process_document(doc_id: str | uuid.UUID) -> Document | None:
                 chunk_size=chunking.chunk_size,
                 overlap=chunking.overlap,
             )
+            # 内容审核（08 §8：文档过审，命中即拦截）
+            moderation = await check_text(
+                db,
+                " ".join(
+                    f"{r.get('question', '')} {r.get('answer', '')}" for r in records
+                ),
+            )
+            if moderation["blocked"]:
+                raise ValueError(f"内容命中敏感词：{moderation['matched']}")
 
             # 重新解析时先清空旧切片与向量
             await db.execute(delete(Chunk).where(Chunk.doc_id == doc.id))
@@ -79,6 +90,7 @@ async def process_document(doc_id: str | uuid.UUID) -> Document | None:
             )
             return doc
         except Exception as exc:  # noqa: BLE001
+            TASK_FAILURES.labels(kind="document").inc()
             await db.rollback()
             doc = await db.get(Document, doc_id)
             if doc is not None:
