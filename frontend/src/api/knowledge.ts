@@ -9,6 +9,9 @@ export interface KnowledgeBase {
   doc_count: number;
   created_at: string;
   updated_at: string;
+  visibility?: string;
+  visible_roles?: string[];
+  visible_user_ids?: string[];
 }
 
 export interface KnowledgeBaseDetail {
@@ -89,7 +92,13 @@ export function createKnowledgeBase(data: {
 
 export function updateKnowledgeBase(
   id: string,
-  data: { name: string; description: string },
+  data: {
+    name: string;
+    description: string;
+    visibility?: string;
+    visible_roles?: string[];
+    visible_user_ids?: string[];
+  },
 ): Promise<KnowledgeBase> {
   return request<KnowledgeBase>({
     url: `/knowledge-bases/${id}`,
@@ -169,4 +178,3 @@ export function updateChunk(id: string, payload: Partial<ChunkPayload>): Promise
 export function deleteChunk(id: string): Promise<null> {
   return request<null>({ url: `/chunks/${id}`, method: 'DELETE' });
 }
-

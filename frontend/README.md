@@ -33,6 +33,8 @@ npm run dev
 - `src/pages/Chat.tsx`：B4 智能客服页（SSE 流式、引用面板与反馈、对话内表单、模型下拉、会话恢复）
 - `src/pages/evaluation/`：B4.5 应用评测（评测集/任务/回流候选 Tab、报告页、CSV 导出、人工调通过）
 - `src/pages/TicketsPage.tsx` / `DashboardPage.tsx` / `SessionsPage.tsx` / `pages/sessions/`：B5 工单、工作台（recharts）、会话记录列表与详情
+- `src/pages/SettingsPage.tsx` + `pages/settings/`：B6a 六 Tab 系统设置（模型/Prompt/客服规则/账号权限/日志审计/数据管理）
+- `src/pages/HelpPage.tsx` + `pages/help/`：B6a 帮助文档（react-markdown、目录锚点、搜索）
 
 ## 里程碑对应
 

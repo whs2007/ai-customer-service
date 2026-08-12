@@ -20,8 +20,8 @@ const EvaluationPage = lazy(() => import('../pages/evaluation/EvaluationPage'));
 const EvalReportPage = lazy(() => import('../pages/evaluation/ReportPage'));
 const SessionsPage = lazy(() => import('../pages/SessionsPage'));
 const SessionDetailPage = lazy(() => import('../pages/sessions/SessionDetailPage'));
-const Settings = lazy(() => import('../pages/Settings'));
-const Help = lazy(() => import('../pages/Help'));
+const SettingsPage = lazy(() => import('../pages/SettingsPage'));
+const HelpPage = lazy(() => import('../pages/HelpPage'));
 const NotFound = lazy(() => import('../pages/NotFound'));
 
 const withSuspense = (node: React.ReactNode) => (
@@ -66,8 +66,8 @@ export const router = createBrowserRouter([
           },
           { path: 'sessions', element: withSuspense(<SessionsPage />) },
           { path: 'sessions/:id', element: withSuspense(<SessionDetailPage />) },
-          { path: 'settings', element: withSuspense(<Settings />) },
-          { path: 'help', element: withSuspense(<Help />) },
+          { path: 'settings', element: withSuspense(<SettingsPage />) },
+          { path: 'help', element: withSuspense(<HelpPage />) },
           { path: '*', element: withSuspense(<NotFound />) },
         ],
       },
