@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>会话记录 · AI 智能客服系统（HTML 原型）</title>
+<style>
+  :root {
+    --primary: #3B82F6;
+    --primary-dark: #2563EB;
+    --primary-light: #EFF6FF;
+    --bg: #F5F6FA;
+    --card: #FFFFFF;
+    --border: #E5E7EB;
+    --text: #1F2937;
+    --text-2: #6B7280;
+    --text-3: #9CA3AF;
+    --success: #16A34A;
+    --success-bg: #F0FDF4;
+    --warning: #F59E0B;
+    --warning-bg: #FFFBEB;
+    --danger: #EF4444;
+    --danger-bg: #FEF2F2;
+    --info: #3B82F6;
+    --info-bg: #EFF6FF;
+    --radius: 14px;
+    --shadow: 0 1px 3px rgba(0,0,0,.06);
+    --shadow-hover: 0 4px 12px rgba(0,0,0,.10);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+    background: var(--bg); color: var(--text); display: flex; min-height: 100vh;
+  }
+  .sidebar {
+    width: 240px; background: var(--card); border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh;
+  }
+  .logo { padding: 24px 20px 16px; }
+  .logo-title { font-size: 18px; font-weight: 600; }
+  .logo-sub { font-size: 12px; color: var(--text-3); margin-top: 2px; }
+  .nav { flex: 1; padding: 8px 12px; overflow-y: auto; }
+  .nav-item {
+    display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px;
+    margin-bottom: 2px; font-size: 14px; color: var(--text-2); cursor: pointer; position: relative;
+  }
+  .nav-item:hover { background: #F3F4F6; color: var(--text); }
+  .nav-item.active { background: var(--primary-light); color: var(--primary-dark); font-weight: 500; }
+  .nav-item.active::before {
+    content: ""; position: absolute; left: -12px; top: 8px; bottom: 8px;
+    width: 3px; border-radius: 2px; background: var(--primary);
+  }
+  .nav-icon { width: 16px; text-align: center; font-size: 15px; }
+  .sidebar-foot { padding: 12px; border-top: 1px solid var(--border); }
+  .user { display: flex; align-items: center; gap: 10px; padding: 10px 12px; }
+  .avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--primary); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+  .user-name { font-size: 14px; }
+  .user-role { font-size: 12px; color: var(--text-3); }
+  .main { flex: 1; min-width: 0; padding: 24px 32px; overflow-y: auto; }
+  .page-title { font-size: 20px; font-weight: 600; }
+  .page-sub { font-size: 13px; color: var(--text-2); margin-top: 4px; }
+  .card { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); }
+  /* 筛选与工具栏 */
+  .filter-bar { display: flex; flex-wrap: wrap; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--border); align-items: center; }
+  .input, .select {
+    height: 36px; padding: 0 12px; border: 1px solid var(--border); border-radius: 10px;
+    font-size: 13px; color: var(--text); background: #fff; outline: none;
+  }
+  .input:focus, .select:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(59,130,246,.15); }
+  .input[type="date"] { color: var(--text-2); }
+  .btn { height: 36px; padding: 0 16px; border-radius: 10px; font-size: 14px; cursor: pointer; border: 1px solid transparent; }
+  .btn-primary { background: var(--primary); color: #fff; }
+  .btn-primary:hover { background: var(--primary-dark); }
+  .btn-default { background: #fff; border-color: var(--border); color: var(--text); }
+  .btn-default:hover { border-color: var(--primary); color: var(--primary-dark); }
+  .btn[disabled] { opacity: .5; cursor: not-allowed; }
+  table { width: 100%; border-collapse: collapse; }
+  thead th { background: #F9FAFB; font-size: 13px; font-weight: 500; color: var(--text-2); text-align: left; padding: 12px 20px; white-space: nowrap; }
+  tbody td { padding: 14px 20px; font-size: 14px; border-top: 1px solid #F3F4F6; }
+  tbody tr:hover { background: #F8FAFC; }
+  td.num { font-variant-numeric: tabular-nums; }
+  .link { color: var(--primary-dark); cursor: pointer; }
+  .link:hover { text-decoration: underline; }
+  .tag { display: inline-flex; align-items: center; gap: 4px; padding: 2px 10px; border-radius: 999px; font-size: 12px; }
+  .tag-green { background: var(--success-bg); color: var(--success); }
+  .tag-blue { background: var(--info-bg); color: var(--info); }
+  .tag-orange { background: var(--warning-bg); color: var(--warning); }
+  .tag-red { background: var(--danger-bg); color: var(--danger); }
+  .tag-gray { background: #F3F4F6; color: var(--text-2); }
+  .pager { display: flex; align-items: center; justify-content: flex-end; gap: 16px; padding: 14px 20px; font-size: 13px; color: var(--text-2); }
+  /* 会话详情 */
+  .back-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+  .detail-wrap { display: flex; gap: 16px; align-items: flex-start; }
+  .chat-col { flex: 1; min-width: 0; }
+  .side-col { width: 340px; flex-shrink: 0; display: flex; flex-direction: column; gap: 16px; }
+  .chat-head { display: flex; align-items: center; gap: 10px; padding: 16px 20px; border-bottom: 1px solid var(--border); }
+  .chat-head .sid { font-size: 14px; font-weight: 500; font-variant-numeric: tabular-nums; }
+  .chat-body { padding: 20px; display: flex; flex-direction: column; gap: 16px; min-height: 420px; }
+  .msg { display: flex; gap: 10px; max-width: 72%; }
+  .msg.user { align-self: flex-end; flex-direction: row-reverse; }
+  .msg .bubble { padding: 10px 14px; border-radius: 12px; font-size: 14px; line-height: 1.6; }
+  .msg.ai .bubble { background: #F3F4F6; color: var(--text); }
+  .msg.user .bubble { background: var(--primary); color: #fff; }
+  .msg.sys { align-self: center; max-width: 90%; }
+  .msg.sys .bubble { background: #F9FAFB; border: 1px dashed var(--border); color: var(--text-2); font-size: 13px; text-align: center; }
+  .cite-ref { color: var(--primary-dark); font-size: 12px; cursor: pointer; }
+  .msg-time { font-size: 12px; color: var(--text-3); margin-top: 4px; }
+  .msg.user .msg-time { text-align: right; }
+  .panel-title { font-size: 14px; font-weight: 500; padding: 14px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; }
+  .panel-body { padding: 14px 16px; }
+  .ref-card { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; font-size: 13px; }
+  .ref-card .ref-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+  .ref-card .ref-src { color: var(--text); font-weight: 500; }
+  .ref-card .ref-meta { color: var(--text-3); font-size: 12px; margin-top: 4px; }
+  .trace-step { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px dashed #F3F4F6; font-size: 13px; }
+  .trace-step:last-child { border-bottom: none; }
+  .trace-name { width: 92px; color: var(--text-2); }
+  .trace-val { flex: 1; color: var(--text-3); font-size: 12px; }
+  .trace-time { font-variant-numeric: tabular-nums; color: var(--text-2); }
+  .form-label { font-size: 13px; color: var(--text-2); margin: 10px 0 6px; }
+  textarea { width: 100%; border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; font-size: 13px; font-family: inherit; resize: vertical; outline: none; }
+  textarea:focus { border-color: var(--primary); }
+  .chip { display: inline-block; padding: 4px 12px; border-radius: 999px; border: 1px solid var(--border); font-size: 12px; color: var(--text-2); cursor: pointer; margin: 0 6px 6px 0; }
+  .chip.on { background: var(--primary-light); border-color: var(--primary); color: var(--primary-dark); }
+  .hidden { display: none; }
+  .empty { text-align: center; padding: 56px 20px; color: var(--text-2); }
+  .empty .icon { font-size: 40px; margin-bottom: 8px; }
+</style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="logo">
+      <div class="logo-title">AI 智能客服系统</div>
+      <div class="logo-sub">LangGraph + RAG</div>
+    </div>
+    <nav class="nav">
+      <div class="nav-item"><span class="nav-icon">▦</span>工作台</div>
+      <div class="nav-item"><span class="nav-icon">☺</span>智能客服</div>
+      <div class="nav-item"><span class="nav-icon">▤</span>知识库</div>
+      <div class="nav-item"><span class="nav-icon">⌕</span>检索测试</div>
+      <div class="nav-item"><span class="nav-icon">☰</span>客服工单</div>
+      <div class="nav-item"><span class="nav-icon">◎</span>应用评测</div>
+      <div class="nav-item active"><span class="nav-icon">≡</span>会话记录</div>
+      <div class="nav-item"><span class="nav-icon">⚙</span>系统设置</div>
+      <div class="nav-item"><span class="nav-icon">?</span>帮助文档</div>
+    </nav>
+    <div class="sidebar-foot">
+      <div class="user">
+        <div class="avatar">管</div>
+        <div><div class="user-name">管理员</div><div class="user-role">admin</div></div>
+      </div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="page-title">会话记录</div>
+    <div class="page-sub">统一查阅会话消息、知识引用与调用链路；支持人工标注并回流评测集</div>
+
+    <!-- 列表视图 -->
+    <section id="view-list">
+      <div class="card">
+        <div class="filter-bar">
+          <span style="font-size:13px;color:var(--text-2)">时间范围</span>
+          <input class="input" type="date" value="2026-08-06">
+          <span style="color:var(--text-3)">—</span>
+          <input class="input" type="date" value="2026-08-12">
+          <select class="select"><option>全部意图</option><option>普通问题</option><option>查询问题</option><option>知识库问答</option><option>投诉转人工</option></select>
+          <select class="select"><option>全部状态</option><option>进行中 active</option><option>已结束 closed</option><option>已转人工 transferred</option></select>
+          <select class="select"><option>全部</option><option>已转人工</option><option>未转人工</option></select>
+          <input class="input" placeholder="搜索会话 ID / 消息内容…" style="min-width:220px">
+          <button class="btn btn-primary">查询</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>会话 ID</th><th>开始时间</th><th>意图</th><th>消息数</th><th>是否转人工</th><th>关联工单</th><th>标注状态</th><th>操作</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="num">s_20260812_004</td><td class="num">2026-08-12 10:22</td>
+                <td><span class="tag tag-orange">投诉转人工</span></td><td class="num">3</td>
+                <td><span class="tag tag-red">是</span></td>
+                <td class="num"><span class="link">TK20260812102230c3d4</span></td>
+                <td><span class="tag tag-gray">未标注</span></td>
+                <td><span class="link" onclick="showDetail()">查看</span></td>
+              </tr>
+              <tr>
+                <td class="num">s_20260812_003</td><td class="num">2026-08-12 10:05</td>
+                <td><span class="tag tag-blue">查询问题</span></td><td class="num">2</td>
+                <td><span class="tag tag-gray">否</span></td><td class="num">—</td>
+                <td><span class="tag tag-gray">未标注</span></td>
+                <td><span class="link" onclick="showDetail()">查看</span></td>
+              </tr>
+              <tr>
+                <td class="num">s_20260812_002</td><td class="num">2026-08-12 09:47</td>
+                <td><span class="tag tag-orange">投诉转人工</span></td><td class="num">6</td>
+                <td><span class="tag tag-red">是</span></td>
+                <td class="num"><span class="link">TK20260812101815a1b2</span></td>
+                <td><span class="tag tag-green">已标注</span></td>
+                <td><span class="link" onclick="showDetail()">查看</span></td>
+              </tr>
+              <tr>
+                <td class="num">s_20260812_001</td><td class="num">2026-08-12 09:31</td>
+                <td><span class="tag tag-blue">知识库问答</span></td><td class="num">4</td>
+                <td><span class="tag tag-gray">否</span></td><td class="num">—</td>
+                <td><span class="tag tag-gray">未标注</span></td>
+                <td><span class="link" onclick="showDetail()">查看</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="pager">
+          <span>共 4 条</span><span>第 1/1 页</span>
+          <button class="btn btn-default" disabled>上一页</button>
+          <button class="btn btn-default" disabled>下一页</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 会话详情 -->
+    <section id="view-detail" class="hidden">
+      <div class="back-bar">
+        <button class="btn btn-default" onclick="showList()">← 返回列表</button>
+      </div>
+      <div class="detail-wrap">
+        <div class="chat-col card">
+          <div class="chat-head">
+            <span class="sid">s_20260812_002</span>
+            <span class="tag tag-orange">投诉转人工</span>
+            <span class="tag tag-red">已转人工</span>
+            <div style="flex:1"></div>
+            <span style="font-size:12px;color:var(--text-3)">2026-08-12 09:47 开始 · 6 条消息</span>
+          </div>
+          <div class="chat-body">
+            <div class="msg sys"><div class="bubble">会话开始 · 智能客服接入</div></div>
+            <div class="msg user">
+              <div class="avatar" style="width:28px;height:28px;font-size:12px">客</div>
+              <div><div class="bubble">我买的手机有质量问题，屏幕有坏点，我要投诉！</div><div class="msg-time">09:47</div></div>
+            </div>
+            <div class="msg ai">
+              <div class="avatar" style="width:28px;height:28px;background:#9CA3AF;font-size:12px">AI</div>
+              <div><div class="bubble">非常抱歉给您带来不好的体验。为尽快为您处理，我需要先确认：订单号是多少？<span class="cite-ref">[1]</span></div><div class="msg-time">09:47 · 0.8s</div></div>
+            </div>
+            <div class="msg user">
+              <div class="avatar" style="width:28px;height:28px;font-size:12px">客</div>
+              <div><div class="bubble">订单号 202608120001234</div><div class="msg-time">09:48</div></div>
+            </div>
+            <div class="msg ai">
+              <div class="avatar" style="width:28px;height:28px;background:#9CA3AF;font-size:12px">AI</div>
+              <div><div class="bubble">已为您查询订单：202608120001234，状态为已签收（签收日期 2026-08-10）。关于质量问题，请提供坏点照片，我们会优先为您处理退换货。<span class="cite-ref">[2]</span></div><div class="msg-time">09:48 · 1.6s</div></div>
+            </div>
+            <div class="msg user">
+              <div class="avatar" style="width:28px;height:28px;font-size:12px">客</div>
+              <div><div class="bubble">我不满意，我要转人工！</div><div class="msg-time">09:49</div></div>
+            </div>
+            <div class="msg sys"><div class="bubble">已为您转接人工客服，工单号 TK20260812101815a1b2，请稍候</div></div>
+          </div>
+        </div>
+
+        <div class="side-col">
+          <div class="card">
+            <div class="panel-title">知识引用</div>
+            <div class="panel-body">
+              <div class="ref-card">
+                <div class="ref-head"><span class="ref-src">FAQ知识库导入模板.xlsx</span><span class="tag tag-green">正常</span></div>
+                <div>质量问题退货运费谁承担？</div>
+                <div class="ref-meta">第 5 页 · 检索 95 · 重排 0.93 · 来源：售后知识库</div>
+              </div>
+              <div class="ref-card">
+                <div class="ref-head"><span class="ref-src">FAQ知识库导入模板.xlsx</span><span class="tag tag-red">已标记无效</span></div>
+                <div>软件激活后还能退款吗？</div>
+                <div class="ref-meta">第 4 页 · 检索 11 · 重排 0.21 · 来源：售后知识库</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="panel-title">调用链路（trace）</div>
+            <div class="panel-body">
+              <div class="trace-step"><span class="trace-name">意图识别</span><span class="trace-val">complaint</span><span class="trace-time">180ms</span></div>
+              <div class="trace-step"><span class="trace-name">RAG 检索</span><span class="trace-val">3 条命中 · kb_ids=售后知识库</span><span class="trace-time">260ms</span></div>
+              <div class="trace-step"><span class="trace-name">重排</span><span class="trace-val">top20 → top3</span><span class="trace-time">120ms</span></div>
+              <div class="trace-step"><span class="trace-name">生成</span><span class="trace-val">glm-4-flash · 182 tokens</span><span class="trace-time">1.6s</span></div>
+              <div class="trace-step"><span class="trace-name">转人工</span><span class="trace-val">创建工单 TK…a1b2</span><span class="trace-time">80ms</span></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="panel-title">人工标注</div>
+            <div class="panel-body">
+              <div class="form-label">标签（多选）</div>
+              <div>
+                <span class="chip on">投诉</span><span class="chip on">质量问题</span>
+                <span class="chip">退货</span><span class="chip">退款</span><span class="chip">物流</span>
+              </div>
+              <div class="form-label">备注</div>
+              <textarea rows="3" placeholder="补充说明，如：转人工原因、处理结果…">用户对屏幕坏点不满，已转人工处理；建议补充“质量问题举证流程”FAQ。</textarea>
+              <div class="form-label"><input type="checkbox" checked> 纳入评测集（目标：售后知识库公开样例集）</div>
+              <div style="margin-top:12px;display:flex;gap:10px">
+                <button class="btn btn-primary" style="flex:1">保存标注</button>
+                <button class="btn btn-default">重置</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="panel-title">关联工单</div>
+            <div class="panel-body" style="font-size:13px">
+              工单号：<span class="link">TK20260812101815a1b2</span>
+              <div style="color:var(--text-3);font-size:12px;margin-top:4px">状态 open · 优先级 high · 点击跳转工单详情</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    function showDetail() { document.getElementById('view-list').classList.add('hidden'); document.getElementById('view-detail').classList.remove('hidden'); }
+    function showList() { document.getElementById('view-detail').classList.add('hidden'); document.getElementById('view-list').classList.remove('hidden'); }
+    document.querySelectorAll('.chip').forEach(c => c.addEventListener('click', () => c.classList.toggle('on')));
+  </script>
+</body>
+</html>

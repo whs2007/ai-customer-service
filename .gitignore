@@ -1,0 +1,25 @@
+# 环境变量与密钥（不入库）
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+*.egg-info/
+
+# Node
+node_modules/
+dist/
+*.tsbuildinfo
+
+# 运行时数据
+backend/storage/
+
+# 系统文件
+.DS_Store
+Thumbs.db
+desktop.ini

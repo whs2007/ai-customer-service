@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>应用评测 · AI 智能客服系统（HTML 原型）</title>
+<style>
+  :root {
+    --primary: #3B82F6;
+    --primary-dark: #2563EB;
+    --primary-light: #EFF6FF;
+    --bg: #F5F6FA;
+    --card: #FFFFFF;
+    --border: #E5E7EB;
+    --text: #1F2937;
+    --text-2: #6B7280;
+    --text-3: #9CA3AF;
+    --success: #16A34A;
+    --success-bg: #F0FDF4;
+    --warning: #F59E0B;
+    --warning-bg: #FFFBEB;
+    --danger: #EF4444;
+    --danger-bg: #FEF2F2;
+    --info: #3B82F6;
+    --info-bg: #EFF6FF;
+    --radius: 14px;
+    --shadow: 0 1px 3px rgba(0,0,0,.06);
+    --shadow-hover: 0 4px 12px rgba(0,0,0,.10);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    min-height: 100vh;
+  }
+  /* 侧边栏（01 §2：固定 240–260px，通栏高） */
+  .sidebar {
+    width: 240px;
+    background: var(--card);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+  }
+  .logo { padding: 24px 20px 16px; }
+  .logo-title { font-size: 18px; font-weight: 600; }
+  .logo-sub { font-size: 12px; color: var(--text-3); margin-top: 2px; }
+  .nav { flex: 1; padding: 8px 12px; overflow-y: auto; }
+  .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 12px; border-radius: 10px; margin-bottom: 2px;
+    font-size: 14px; color: var(--text-2); cursor: pointer; position: relative;
+  }
+  .nav-item:hover { background: #F3F4F6; color: var(--text); }
+  .nav-item.active { background: var(--primary-light); color: var(--primary-dark); font-weight: 500; }
+  .nav-item.active::before {
+    content: ""; position: absolute; left: -12px; top: 8px; bottom: 8px;
+    width: 3px; border-radius: 2px; background: var(--primary);
+  }
+  .nav-icon { width: 16px; text-align: center; font-size: 15px; }
+  .sidebar-foot { padding: 12px; border-top: 1px solid var(--border); }
+  .foot-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; font-size: 14px; color: var(--text-2); cursor: pointer; }
+  .foot-item:hover { background: #F3F4F6; }
+  .user { display: flex; align-items: center; gap: 10px; padding: 10px 12px; margin-top: 6px; }
+  .avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--primary); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+  .user-name { font-size: 14px; }
+  .user-role { font-size: 12px; color: var(--text-3); }
+  /* 主内容区 */
+  .main { flex: 1; min-width: 0; padding: 24px 32px; overflow-y: auto; }
+  .page-title { font-size: 20px; font-weight: 600; }
+  .page-sub { font-size: 13px; color: var(--text-2); margin-top: 4px; }
+  /* Tab（01 §4.4 交互风格） */
+  .tabs { display: flex; gap: 24px; border-bottom: 1px solid var(--border); margin: 20px 0 16px; }
+  .tab { padding: 10px 2px; font-size: 14px; color: var(--text-2); cursor: pointer; border-bottom: 2px solid transparent; }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--primary-dark); border-bottom-color: var(--primary); font-weight: 500; }
+  /* 卡片与工具栏 */
+  .card { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); }
+  .toolbar { display: flex; align-items: center; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--border); }
+  .toolbar .spacer { flex: 1; }
+  .input, .select {
+    height: 36px; padding: 0 12px; border: 1px solid var(--border); border-radius: 10px;
+    font-size: 14px; color: var(--text); background: #fff; outline: none; min-width: 220px;
+  }
+  .input:focus, .select:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(59,130,246,.15); }
+  .btn { height: 36px; padding: 0 16px; border-radius: 10px; font-size: 14px; cursor: pointer; border: 1px solid transparent; }
+  .btn-primary { background: var(--primary); color: #fff; }
+  .btn-primary:hover { background: var(--primary-dark); }
+  .btn-default { background: #fff; border-color: var(--border); color: var(--text); }
+  .btn-default:hover { border-color: var(--primary); color: var(--primary-dark); }
+  .btn-danger-text { color: var(--danger); }
+  .btn[disabled] { opacity: .5; cursor: not-allowed; }
+  /* 表格（01 §4.4） */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; }
+  thead th { background: #F9FAFB; font-size: 13px; font-weight: 500; color: var(--text-2); text-align: left; padding: 12px 20px; white-space: nowrap; }
+  tbody td { padding: 14px 20px; font-size: 14px; border-top: 1px solid #F3F4F6; }
+  tbody tr:hover { background: #F8FAFC; }
+  td.num { font-variant-numeric: tabular-nums; }
+  .link { color: var(--primary-dark); cursor: pointer; }
+  .link:hover { text-decoration: underline; }
+  .op { color: var(--text-2); font-size: 13px; }
+  .op .link { margin-right: 12px; }
+  /* 标签/徽标（01 §4.4 胶囊） */
+  .tag { display: inline-flex; align-items: center; gap: 4px; padding: 2px 10px; border-radius: 999px; font-size: 12px; }
+  .tag-green { background: var(--success-bg); color: var(--success); }
+  .tag-blue { background: var(--info-bg); color: var(--info); }
+  .tag-orange { background: var(--warning-bg); color: var(--warning); }
+  .tag-red { background: var(--danger-bg); color: var(--danger); }
+  .tag-gray { background: #F3F4F6; color: var(--text-2); }
+  /* 空态（01 §5） */
+  .empty { text-align: center; padding: 56px 20px; color: var(--text-2); }
+  .empty .icon { font-size: 40px; margin-bottom: 8px; }
+  .empty .sub { font-size: 13px; color: var(--text-3); margin-top: 4px; }
+  /* 进度条 */
+  .progress { width: 120px; height: 8px; border-radius: 4px; background: #EEF2F7; overflow: hidden; }
+  .progress-fill { height: 100%; border-radius: 4px; background: linear-gradient(90deg, #7AB6FF, #4A9EFF); }
+  /* 指标卡片（01 §4.2 KPI 风格） */
+  .metric-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin: 16px 0; }
+  .metric { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); padding: 20px 24px; }
+  .metric .label { font-size: 13px; color: var(--text-2); }
+  .metric .value { font-size: 30px; font-weight: 700; margin-top: 6px; font-variant-numeric: tabular-nums; }
+  .metric .extra { font-size: 12px; color: var(--text-3); margin-top: 4px; }
+  .metric.pending .value { color: var(--text-3); }
+  .metric .badge { margin-left: 8px; }
+  /* 弹窗（01 §4.4） */
+  .mask { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 50; align-items: center; justify-content: center; }
+  .mask.show { display: flex; }
+  .modal { background: #fff; width: 480px; border-radius: 16px; padding: 24px; }
+  .modal-title { font-size: 16px; font-weight: 500; display: flex; justify-content: space-between; align-items: center; }
+  .modal-close { cursor: pointer; color: var(--text-3); font-size: 18px; }
+  .form-item { margin-top: 16px; }
+  .form-label { font-size: 13px; color: var(--text-2); margin-bottom: 6px; }
+  .form-item .input, .form-item textarea { width: 100%; }
+  textarea { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; font-size: 14px; font-family: inherit; resize: vertical; outline: none; }
+  textarea:focus { border-color: var(--primary); }
+  .modal-foot { display: flex; justify-content: flex-end; gap: 12px; margin-top: 20px; }
+  .hidden { display: none; }
+  /* 报告页 */
+  .back-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+  .report-head { display: flex; align-items: center; gap: 16px; margin-bottom: 4px; }
+  .report-head .page-title { font-size: 18px; }
+  .pass-bar { display: flex; gap: 24px; margin: 4px 0 12px; font-size: 13px; color: var(--text-2); }
+</style>
+</head>
+<body>
+  <!-- 侧边栏 -->
+  <aside class="sidebar">
+    <div class="logo">
+      <div class="logo-title">AI 智能客服系统</div>
+      <div class="logo-sub">LangGraph + RAG</div>
+    </div>
+    <nav class="nav">
+      <div class="nav-item"><span class="nav-icon">▦</span>工作台</div>
+      <div class="nav-item"><span class="nav-icon">☺</span>智能客服</div>
+      <div class="nav-item"><span class="nav-icon">▤</span>知识库</div>
+      <div class="nav-item"><span class="nav-icon">⌕</span>检索测试</div>
+      <div class="nav-item"><span class="nav-icon">☰</span>客服工单</div>
+      <div class="nav-item active"><span class="nav-icon">◎</span>应用评测</div>
+      <div class="nav-item"><span class="nav-icon">≡</span>会话记录</div>
+      <div class="nav-item"><span class="nav-icon">⚙</span>系统设置</div>
+      <div class="nav-item"><span class="nav-icon">?</span>帮助文档</div>
+    </nav>
+    <div class="sidebar-foot">
+      <div class="user">
+        <div class="avatar">管</div>
+        <div><div class="user-name">管理员</div><div class="user-role">admin</div></div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- 主内容区 -->
+  <main class="main">
+    <div class="page-title">应用评测</div>
+    <div class="page-sub">评测集 → 评测任务 → 指标报告，衡量知识库回答质量；引用反馈与人工标注可回流评测集</div>
+
+    <div class="tabs">
+      <div class="tab active" data-tab="sets" onclick="showTab('sets')">评测集</div>
+      <div class="tab" data-tab="tasks" onclick="showTab('tasks')">评测任务</div>
+    </div>
+
+    <!-- 评测集 -->
+    <section id="panel-sets" class="card">
+      <div class="toolbar">
+        <input class="input" placeholder="搜索评测集名称…" style="min-width:260px">
+        <div class="spacer"></div>
+        <button class="btn btn-primary" onclick="openModal()">+ 创建评测集</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>名称</th><th>样本数</th><th>来源</th><th>创建人</th><th>创建时间</th><th>操作</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>售后知识库公开样例集</td><td class="num">30</td>
+              <td><span class="tag tag-blue">公开样例</span></td>
+              <td>管理员</td><td class="num">2026-08-12 10:20</td>
+              <td class="op"><span class="link">查看样本</span><span class="link">导入样本</span><span class="link">创建评测任务</span><span class="link btn-danger-text">删除</span></td>
+            </tr>
+            <tr>
+              <td>客服投诉场景集</td><td class="num">12</td>
+              <td><span class="tag tag-gray">手动</span></td>
+              <td>管理员</td><td class="num">2026-08-12 11:05</td>
+              <td class="op"><span class="link">查看样本</span><span class="link">导入样本</span><span class="link">创建评测任务</span><span class="link btn-danger-text">删除</span></td>
+            </tr>
+            <tr>
+              <td>退款政策回归集</td><td class="num">8</td>
+              <td><span class="tag tag-orange">反馈回流</span></td>
+              <td>管理员</td><td class="num">2026-08-12 14:30</td>
+              <td class="op"><span class="link">查看样本</span><span class="link">导入样本</span><span class="link">创建评测任务</span><span class="link btn-danger-text">删除</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 评测任务 -->
+    <section id="panel-tasks" class="card hidden">
+      <div class="toolbar">
+        <select class="select" style="min-width:220px"><option>全部评测集</option><option>售后知识库公开样例集</option><option>客服投诉场景集</option></select>
+        <select class="select" style="min-width:160px"><option>全部状态</option><option>待执行</option><option>运行中</option><option>已完成</option><option>失败</option></select>
+        <div class="spacer"></div>
+        <button class="btn btn-primary">+ 创建评测任务</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>任务编号</th><th>评测集</th><th>对话模型</th><th>状态</th><th>进度</th><th>平均分</th><th>操作</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="num">EV20260812001</td><td>售后知识库公开样例集</td><td>智谱免费 GLM · glm-4-flash</td>
+              <td><span class="tag tag-green">已完成</span></td>
+              <td><span class="num">30/30</span></td>
+              <td class="num"><b>86%</b></td>
+              <td class="op"><span class="link" onclick="showView('report')">查看报告</span><span class="link">重新运行</span><span class="link btn-danger-text">删除</span></td>
+            </tr>
+            <tr>
+              <td class="num">EV20260812002</td><td>客服投诉场景集</td><td>智谱免费 GLM · glm-4-flash</td>
+              <td><span class="tag tag-blue">运行中</span></td>
+              <td><div class="progress"><div class="progress-fill" style="width:58%"></div></div><span class="num" style="font-size:12px;color:var(--text-2)"> 7/12</span></td>
+              <td class="num">—</td>
+              <td class="op"><span class="link">查看进度</span><span class="link btn-danger-text">删除</span></td>
+            </tr>
+            <tr>
+              <td class="num">EV20260812003</td><td>退款政策回归集</td><td>DeepSeek-V3</td>
+              <td><span class="tag tag-gray">待执行</span></td>
+              <td class="num">0/8</td><td class="num">—</td>
+              <td class="op"><span class="link">启动</span><span class="link btn-danger-text">删除</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 评测报告（任务详情） -->
+    <section id="panel-report" class="hidden">
+      <div class="back-bar">
+        <button class="btn btn-default" onclick="showView('tasks')">← 返回任务列表</button>
+      </div>
+      <div class="report-head">
+        <div class="page-title">EV20260812001 评测报告</div>
+        <span class="tag tag-green">已完成</span>
+        <div class="spacer" style="flex:1"></div>
+        <button class="btn btn-default">导出报告</button>
+      </div>
+      <div class="pass-bar">评测集：售后知识库公开样例集（30 条）｜对话模型：智谱免费 GLM · glm-4-flash｜通过 27 / 未通过 3</div>
+
+      <div class="metric-row">
+        <div class="metric">
+          <div class="label">回答准确性 <span class="tag tag-green badge">已实现</span></div>
+          <div class="value">86%</div>
+          <div class="extra">通过率 90%</div>
+        </div>
+        <div class="metric pending">
+          <div class="label">问题相关性 <span class="tag tag-gray badge">预留</span></div>
+          <div class="value">82%</div>
+          <div class="extra">LLM-as-judge</div>
+        </div>
+        <div class="metric pending">
+          <div class="label">语义准确性 <span class="tag tag-gray badge">预留</span></div>
+          <div class="value">84%</div>
+          <div class="extra">LLM-as-judge</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="toolbar">
+          <span style="font-size:15px;font-weight:500">样本明细</span>
+          <div class="spacer"></div>
+          <select class="select" style="min-width:140px"><option>全部（30）</option><option>通过（27）</option><option>未通过（3）</option></select>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>#</th><th>问题</th><th>模型回答</th><th>期望答案</th><th>引用</th><th>回答准确性</th><th>通过</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="num">1</td><td>商品签收后几天可以退货？</td>
+                <td>普通商品自签收之日起 7 天内，在商品完好、配件齐全、不影响二次销售的情况下，可申请无理由退货。</td>
+                <td>普通商品自签收之日起 7 天内可无理由退货（商品完好、配件齐全）。</td>
+                <td><span class="link">FAQ…xlsx 第2页</span></td>
+                <td class="num">95</td><td><span class="tag tag-green">通过</span></td>
+              </tr>
+              <tr>
+                <td class="num">2</td><td>软件激活后还能退款吗？</td>
+                <td>软件类、会员类、赠送码类等虚拟商品，如已激活、兑换、下载或使用，一般不支持无理由退款。</td>
+                <td>虚拟商品已激活一般不支持无理由退款。</td>
+                <td><span class="link">FAQ…xlsx 第4页</span></td>
+                <td class="num">91</td><td><span class="tag tag-green">通过</span></td>
+              </tr>
+              <tr>
+                <td class="num">3</td><td>退款审核通过后多久到账？</td>
+                <td>审核通过后 3 个工作日内到账，具体以银行处理时间为准；建议您留意银行卡到账通知。</td>
+                <td>审核通过后 3 个工作日内到账（视银行处理时间为准）。</td>
+                <td><span class="link">FAQ…xlsx 第3页</span></td>
+                <td class="num">88</td><td><span class="tag tag-green">通过</span></td>
+              </tr>
+              <tr>
+                <td class="num">4</td><td>投诉后多久会有人联系我？</td>
+                <td>您的投诉已记录，我们会尽快安排客服专员与您联系，请保持电话畅通。</td>
+                <td>投诉通过工单转人工处理，客服会与用户联系。</td>
+                <td><span class="link">FAQ…xlsx 第5页</span></td>
+                <td class="num">72</td><td><span class="tag tag-red">未通过</span></td>
+              </tr>
+              <tr>
+                <td class="num">5</td><td>商品质量问题退货运费谁承担？</td>
+                <td>如确认是商品质量问题、错发漏发或平台原因导致退货，商家承担合理退货运费。</td>
+                <td>确认质量问题，商家承担来回运费。</td>
+                <td><span class="link">FAQ…xlsx 第5页</span></td>
+                <td class="num">93</td><td><span class="tag tag-green">通过</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:flex-end;gap:16px;padding:14px 20px;font-size:13px;color:var(--text-2)">
+          <span>共 30 条</span>
+          <span>第 1/2 页</span>
+          <button class="btn btn-default" disabled>上一页</button>
+          <button class="btn btn-default">下一页</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- 创建评测集弹窗 -->
+  <div class="mask" id="modal">
+    <div class="modal">
+      <div class="modal-title">创建评测集 <span class="modal-close" onclick="closeModal()">×</span></div>
+      <div class="form-item">
+        <div class="form-label">名称（必填，≤ 100 字，唯一）</div>
+        <input class="input" placeholder="例如：售后知识库回归集">
+      </div>
+      <div class="form-item">
+        <div class="form-label">描述（≤ 200 字）</div>
+        <textarea rows="3" placeholder="描述该评测集的覆盖范围"></textarea>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-default" onclick="closeModal()">取消</button>
+        <button class="btn btn-primary">确定</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function showTab(name) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+      document.getElementById('panel-sets').classList.toggle('hidden', name !== 'sets');
+      document.getElementById('panel-tasks').classList.toggle('hidden', name !== 'tasks');
+      if (name === 'tasks') showView('tasks');
+    }
+    function showView(view) {
+      document.getElementById('panel-tasks').classList.toggle('hidden', view !== 'tasks');
+      document.getElementById('panel-report').classList.toggle('hidden', view !== 'report');
+    }
+    function openModal() { document.getElementById('modal').classList.add('show'); }
+    function closeModal() { document.getElementById('modal').classList.remove('show'); }
+    document.getElementById('modal').addEventListener('click', e => { if (e.target.id === 'modal') closeModal(); });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+  </script>
+</body>
+</html>

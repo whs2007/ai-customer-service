@@ -1,0 +1,18 @@
+纯网页主体裁剪结果 (PNG, 无损) 与源图对应关系:
+box 为在上一版截图(cropped文件夹)中的坐标 left,top,right,bottom
+
+img01.png  <-  img01.jpg  box=(0, 95, 3000, 1638)
+img02.png  <-  img02.jpg  box=(0, 48, 1514, 825)
+img03.png  <-  img03.jpg  box=(0, 0, 1514, 851)
+img04.png  <-  img04.jpg  box=(0, 48, 1514, 825)
+img05.png  <-  img05.jpg  box=(0, 48, 1514, 825)
+img06.png  <-  img06.jpg  box=(0, 48, 1514, 825)
+img07.png  <-  img07.jpg  box=(0, 0, 1514, 826)
+img08.png  <-  img08.jpg  box=(0, 48, 1514, 825)
+img09.png  <-  img09.jpg  box=(0, 48, 1514, 825)
+img10.png  <-  img10.jpg  box=(0, 48, 1514, 825)
+img11.png  <-  img11.jpg  box=(0, 0, 1514, 851)
+img12.png  <-  img12.jpg  box=(0, 0, 1514, 851)
+img13.png  <-  img13.jpg  box=(0, 48, 1514, 825)
+img14.png  <-  img14.jpg  box=(0, 0, 1514, 851)
+img15.png  <-  img15.jpg  box=(0, 48, 1514, 825)
