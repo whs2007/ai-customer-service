@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import DateTime, ForeignKey, String, func
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -24,6 +24,18 @@ class KnowledgeBase(Base):
     description: Mapped[str] = mapped_column(
         String(200), nullable=False, default="", comment="描述"
     )
+    visibility: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="all",
+        comment="可见范围：all/role/user（00 §3 新增：资源级权限）",
+    )
+    visible_roles: Mapped[list] = mapped_column(
+        JSONB, nullable=False, default=list, comment="role 模式下的可见角色列表"
+    )
+    visible_user_ids: Mapped[list] = mapped_column(
+        JSONB, nullable=False, default=list, comment="user 模式下的可见用户 ID 列表"
+    )
     created_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
@@ -39,4 +51,3 @@ class KnowledgeBase(Base):
         onupdate=func.now(),
         nullable=False,
     )
-

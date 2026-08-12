@@ -8,22 +8,16 @@ import time
 import uuid
 
 import structlog
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.graph import chat_graph
+from app.agents.safety import check_prompt_injection
 from app.agents.state import ChatState
-from app.api.deps import get_db, require_roles
-from app.core.response import PageData, ResponseModel, ok
+from app.api.deps import require_roles
 from app.models.user import Role, User
 from app.rag.retriever import filter_accessible_kb_ids
-from app.schemas.chat import (
-    ChatRequest,
-    MessageOut,
-    SessionDetailOut,
-    SessionOut,
-)
+from app.schemas.chat import ChatRequest
 from app.services import model_profile_service, session_service
 
 logger: structlog.stdlib.BoundLogger = structlog.get_logger(__name__)
@@ -48,7 +42,7 @@ async def _run_chat_pipeline(
     request_id = str(uuid.uuid4())
     async with get_session_factory()() as db:
         try:
-            accessible = await filter_accessible_kb_ids(db, payload.kb_ids)
+            accessible = await filter_accessible_kb_ids(db, payload.kb_ids, user)
             if not accessible:
                 _emit(queue, "error", {"code": "40000", "message": "所选知识库无效或无权限"})
                 return
@@ -61,6 +55,35 @@ async def _run_chat_pipeline(
             await session_service.append_message(
                 db, session.id, "user", payload.message
             )
+            # Prompt 注入前置过滤（08 §8）：命中越权/改指令关键词时返回兜底，不进入图执行
+            injection = check_prompt_injection(payload.message)
+            if injection:
+                guard = (
+                    "抱歉，我检测到您的消息中包含疑似越权指令，"
+                    "我只能回答与售后服务相关的问题。"
+                )
+                await session_service.append_message(
+                    db, session.id, "assistant", guard, intent="other"
+                )
+                _emit(queue, "token", {"content": guard})
+                _emit(
+                    queue,
+                    "done",
+                    {
+                        "message_id": None,
+                        "intent": "other",
+                        "ticket_no": None,
+                        "session_id": str(session.id),
+                    },
+                )
+                logger.warning(
+                    "prompt_injection_blocked",
+                    session_id=str(session.id),
+                    user_id=str(user.id),
+                    matched=injection,
+                )
+                return
+
             recent = await session_service.get_recent_messages(db, session.id)
             messages = [{"role": m.role, "content": m.content} for m in recent]
             if payload.form_data:
@@ -103,16 +126,20 @@ async def _run_chat_pipeline(
             started = time.perf_counter()
             result = await chat_graph.ainvoke(state)
 
-            assistant = await session_service.append_message(
-                db,
-                session.id,
-                "assistant",
-                result.get("answer", ""),
-                intent=result.get("intent"),
-                cited_chunk_ids=[
-                    str(c["chunk_id"]) for c in result.get("citations", [])
-                ],
-            )
+            # 转人工/投诉等无文本回答时不落空 assistant 消息（避免空气泡）
+            answer = (result.get("answer") or "").strip()
+            assistant = None
+            if answer:
+                assistant = await session_service.append_message(
+                    db,
+                    session.id,
+                    "assistant",
+                    answer,
+                    intent=result.get("intent"),
+                    cited_chunk_ids=[
+                        str(c["chunk_id"]) for c in result.get("citations", [])
+                    ],
+                )
 
             ticket_no = None
             if result.get("ticket"):
@@ -137,7 +164,7 @@ async def _run_chat_pipeline(
                 request_id=request_id,
                 steps=result.get("trace", []),
                 latency_ms=latency_ms,
-                message_id=assistant.id,
+                message_id=assistant.id if assistant else None,
             )
 
             # 精简字段 + UUID 转字符串后下发（JSON 序列化）
@@ -164,7 +191,7 @@ async def _run_chat_pipeline(
                 queue,
                 "done",
                 {
-                    "message_id": str(assistant.id),
+                    "message_id": str(assistant.id) if assistant else None,
                     "intent": result.get("intent"),
                     "ticket_no": ticket_no,
                     "session_id": str(session.id),
@@ -201,37 +228,4 @@ async def chat(
         event_stream(),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-    )
-
-
-@router.get("/sessions", response_model=ResponseModel[PageData[SessionOut]])
-async def list_sessions(
-    page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=10, ge=1, le=100),
-    _: User = Depends(require_roles(Role.ADMIN, Role.AGENT)),
-    db: AsyncSession = Depends(get_db),
-) -> ResponseModel:
-    items, total = await session_service.list_sessions(db, page, page_size)
-    return ok(
-        data=PageData[SessionOut](
-            items=[SessionOut.model_validate(s) for s in items],
-            total=total,
-            page=page,
-            page_size=page_size,
-        )
-    )
-
-
-@router.get("/sessions/{session_id}", response_model=ResponseModel[SessionDetailOut])
-async def get_session(
-    session_id: uuid.UUID,
-    _: User = Depends(require_roles(Role.ADMIN, Role.AGENT)),
-    db: AsyncSession = Depends(get_db),
-) -> ResponseModel:
-    session, messages = await session_service.get_session_with_messages(db, session_id)
-    return ok(
-        data=SessionDetailOut(
-            session=SessionOut.model_validate(session),
-            messages=[MessageOut.model_validate(m) for m in messages],
-        )
     )

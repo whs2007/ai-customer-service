@@ -6,6 +6,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.mask import mask_object
 from app.models.audit_log import AuditLog
 
 
@@ -24,8 +25,7 @@ async def write_audit(
             action=action,
             target_type=target_type,
             target_id=target_id,
-            detail=detail,
+            detail=mask_object(detail) if detail else detail,
             ip=ip,
         )
     )
-

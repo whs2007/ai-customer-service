@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.exceptions import BadRequestError
 from app.models.knowledge_base import KnowledgeBase
+from app.models.user import Role, User
 from app.rag.embeddings import EmbeddingClient
 from app.rag.reranker import RerankClient
 from app.rag.vector_store import keyword_search, vector_search
@@ -19,16 +20,34 @@ RERANK_TOP_N = 20  # 重排候选数（建议 20）
 
 
 async def filter_accessible_kb_ids(
-    db: AsyncSession, requested: list[uuid.UUID]
+    db: AsyncSession, requested: list[uuid.UUID], user: User | None = None
 ) -> list[uuid.UUID]:
-    """逐库权限校验：剔除不存在/已软删除的库（08 §8 数据隔离）。"""
+    """逐库权限校验（08 §8 数据隔离 / 00 §3 资源级权限）。
+
+    admin 与未传用户：仅校验存在；agent/viewer：按知识库可见范围
+    （all / role / user）过滤。
+    """
     result = await db.execute(
-        select(KnowledgeBase.id).where(
-            KnowledgeBase.id.in_(requested),
-            KnowledgeBase.deleted_at.is_(None),
+        select(
+            KnowledgeBase.id,
+            KnowledgeBase.visibility,
+            KnowledgeBase.visible_roles,
+            KnowledgeBase.visible_user_ids,
+        ).where(
+            KnowledgeBase.id.in_(requested), KnowledgeBase.deleted_at.is_(None)
         )
     )
-    return [row[0] for row in result.all()]
+    accessible: list[uuid.UUID] = []
+    for kb_id, visibility, visible_roles, visible_user_ids in result.all():
+        if user is None or user.role == Role.ADMIN.value or visibility == "all":
+            accessible.append(kb_id)
+        elif visibility == "role" and user.role in (visible_roles or []):
+            accessible.append(kb_id)
+        elif visibility == "user" and str(user.id) in [
+            str(x) for x in (visible_user_ids or [])
+        ]:
+            accessible.append(kb_id)
+    return accessible
 
 
 def _rrf_fuse(vector_rows: list[dict], keyword_rows: list[dict]) -> list[dict]:
@@ -58,9 +77,17 @@ def _normalize_minmax(entries: list[dict], key: str) -> None:
         )
 
 
-async def run_retrieval_test(db: AsyncSession, kb_ids, query, top_k, tags, retriever_mode) -> dict:
+async def run_retrieval_test(
+    db: AsyncSession,
+    kb_ids,
+    query,
+    top_k,
+    tags,
+    retriever_mode,
+    user: User | None = None,
+) -> dict:
     """检索测试主流程，返回 hits 与生效模式。"""
-    accessible = await filter_accessible_kb_ids(db, kb_ids)
+    accessible = await filter_accessible_kb_ids(db, kb_ids, user)
     if not accessible:
         raise BadRequestError("所选知识库无效或无权限")
 

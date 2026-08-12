@@ -10,7 +10,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_db, require_roles
 from app.core.response import ResponseModel, ok
 from app.models.user import Role, User
-from app.schemas.chat import IntentRulesUpdate, ModelProfileOut
+from app.schemas.chat import (
+    IntentRulesUpdate,
+    ModelProfileCreate,
+    ModelProfileOut,
+    ModelProfileTestOut,
+    ModelProfileUpdate,
+)
 from app.services import model_profile_service, settings_service
 
 router = APIRouter(prefix="/settings", tags=["settings"])
@@ -51,6 +57,82 @@ async def list_model_profiles(
 ) -> ResponseModel:
     profiles = await model_profile_service.list_profiles(db)
     return ok(data=profiles)
+
+
+@router.post("/model-profiles", response_model=ResponseModel[ModelProfileOut])
+async def create_model_profile(
+    payload: ModelProfileCreate,
+    _: User = Depends(require_roles(Role.ADMIN)),
+    db: AsyncSession = Depends(get_db),
+) -> ResponseModel:
+    profile = await model_profile_service.create_profile(db, payload)
+    return ok(
+        data=ModelProfileOut(
+            id=profile.id,
+            name=profile.name,
+            provider=profile.provider,
+            model=profile.model,
+            base_url=profile.base_url,
+            api_key="sk-***" if profile.api_key_enc else "",
+            temperature=profile.temperature,
+            top_p=profile.top_p,
+            max_tokens=profile.max_tokens,
+            role=profile.role,
+            is_default=profile.is_default,
+            enabled=profile.enabled,
+        ),
+        message="创建成功",
+    )
+
+
+@router.put("/model-profiles/{profile_id}", response_model=ResponseModel[ModelProfileOut])
+async def update_model_profile(
+    profile_id: uuid.UUID,
+    payload: ModelProfileUpdate,
+    _: User = Depends(require_roles(Role.ADMIN)),
+    db: AsyncSession = Depends(get_db),
+) -> ResponseModel:
+    profile = await model_profile_service.update_profile(db, profile_id, payload)
+    return ok(
+        data=ModelProfileOut(
+            id=profile.id,
+            name=profile.name,
+            provider=profile.provider,
+            model=profile.model,
+            base_url=profile.base_url,
+            api_key="sk-***" if profile.api_key_enc else "",
+            temperature=profile.temperature,
+            top_p=profile.top_p,
+            max_tokens=profile.max_tokens,
+            role=profile.role,
+            is_default=profile.is_default,
+            enabled=profile.enabled,
+        ),
+        message="更新成功",
+    )
+
+
+@router.delete("/model-profiles/{profile_id}", response_model=ResponseModel)
+async def delete_model_profile(
+    profile_id: uuid.UUID,
+    _: User = Depends(require_roles(Role.ADMIN)),
+    db: AsyncSession = Depends(get_db),
+) -> ResponseModel:
+    await model_profile_service.delete_profile(db, profile_id)
+    return ok(message="删除成功")
+
+
+@router.post(
+    "/model-profiles/{profile_id}/test",
+    response_model=ResponseModel[ModelProfileTestOut],
+)
+async def test_model_profile(
+    profile_id: uuid.UUID,
+    _: User = Depends(require_roles(Role.ADMIN)),
+    db: AsyncSession = Depends(get_db),
+) -> ResponseModel:
+    result = await model_profile_service.test_profile(db, profile_id)
+    return ok(data=result)
 
 
 @router.put("/model-profiles/{profile_id}/activate", response_model=ResponseModel)

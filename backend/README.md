@@ -146,3 +146,15 @@ curl -N -X POST http://127.0.0.1:8000/api/chat \
   -H "Authorization: Bearer <token>" -H "Content-Type: application/json" \
   -d '{"kb_ids":["<kb_id>"],"message":"商品签收后几天可以退货？"}'
 ```
+
+## B4.5 应用评测交付范围
+
+- `/api/evaluations/*`：评测集 CRUD、样本导入（逐条/JSON 批量/30 条公开样例）、评测任务（异步执行 + 进度/报告/重试）、人工调通过、回流候选确认/拒绝
+- 执行链路：逐条走 LangGraph 对话图（eval_mode 不建单）→ LLM-as-judge 打分（有 Key 走真实模型，无 Key 用确定性启发式）
+- 回流：引用反馈 `include_in_eval=true` → 候选 → 管理员确认入集
+
+## B5 运营闭环交付范围
+
+- 工单：`/api/tickets` 列表筛选/详情（命中片段+时间线）/状态流转 open→processing→closed（ticket_notes + 审计）
+- 工作台：`/api/dashboard/stats|trend|intents`（02 §7 口径，按需计算 + 30s 进程内缓存 + dashboard_stats 落表）
+- 会话记录：`/api/sessions` 列表筛选（时间/意图/状态/转人工/关键词/标注）+ 详情（trace/工单/标注）+ `/annotations` 标注回流评测候选

@@ -7,7 +7,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import CheckConstraint, DateTime, ForeignKey, String, Text, func
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -50,6 +50,9 @@ class Ticket(Base):
         String(50), nullable=False, default="human_service"
     )
     content: Mapped[str] = mapped_column(Text, nullable=False, comment="诉求内容")
+    cited_chunk_ids: Mapped[list] = mapped_column(
+        JSONB, nullable=False, default=list, comment="知识库命中片段 ID 列表（08 §4.5 新增）"
+    )
     status: Mapped[str] = mapped_column(
         String(20), nullable=False, default=TicketStatus.OPEN.value
     )
@@ -68,4 +71,3 @@ class Ticket(Base):
         onupdate=func.now(),
         nullable=False,
     )
-

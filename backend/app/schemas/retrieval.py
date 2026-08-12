@@ -45,3 +45,10 @@ class RetrievalResponse(BaseModel):
     rerank_skipped: bool = False
     hits: list[RetrievalHit]
 
+
+class RetrievalCandidatesRequest(BaseModel):
+    """补充引用候选（03 §4.4：从候选片段中选择，08 §6.2 新增）。"""
+
+    kb_ids: list[uuid.UUID] = Field(min_length=1, max_length=20)
+    query: str = Field(min_length=1, max_length=200)
+    top_n: int = Field(default=20, ge=1, le=50, description="候选数量")

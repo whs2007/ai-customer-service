@@ -41,3 +41,16 @@ def document_process_task(self, doc_id: str) -> dict[str, str]:
     except Exception as exc:  # noqa: BLE001
         raise self.retry(exc=exc, countdown=5)
 
+
+@celery_app.task(name="evaluations.run", bind=True, max_retries=1)
+def eval_task_run(self, task_id: str) -> dict[str, str]:
+    """Celery 任务：评测任务逐条执行（内部 asyncio.run 复用 eval_service）。"""
+    import asyncio
+
+    from app.services.eval_service import run_eval_task
+
+    try:
+        asyncio.run(run_eval_task(task_id))
+        return {"task_id": task_id, "status": "done"}
+    except Exception as exc:  # noqa: BLE001
+        raise self.retry(exc=exc, countdown=5)

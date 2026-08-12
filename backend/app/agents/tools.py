@@ -37,6 +37,7 @@ async def create_ticket(
     content: str,
     user_id: uuid.UUID | None,
     priority: str = TicketPriority.MEDIUM.value,
+    cited_chunk_ids: list[str] | None = None,
 ) -> Ticket:
     ticket = Ticket(
         ticket_no=generate_ticket_no(),
@@ -44,9 +45,9 @@ async def create_ticket(
         user_id=user_id,
         content=content[:2000],
         priority=priority,
+        cited_chunk_ids=cited_chunk_ids or [],
     )
     db.add(ticket)
     await db.commit()
     await db.refresh(ticket)
     return ticket
-

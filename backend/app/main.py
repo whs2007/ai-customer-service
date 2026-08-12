@@ -25,12 +25,16 @@ from app.api.routes import (
     auth,
     chat,
     chunks,
+    dashboard,
     documents,
+    evaluations,
     feedbacks,
     health,
     knowledge_bases,
     retrieval,
+    sessions,
     settings as settings_router,
+    tickets,
 )
 from app.core.config import get_settings
 from app.core.exceptions import AppError, InternalError
@@ -88,6 +92,10 @@ def create_app() -> FastAPI:
     app.include_router(chat.router, prefix=settings.api_prefix)
     app.include_router(feedbacks.router, prefix=settings.api_prefix)
     app.include_router(settings_router.router, prefix=settings.api_prefix)
+    app.include_router(evaluations.router, prefix=settings.api_prefix)
+    app.include_router(tickets.router, prefix=settings.api_prefix)
+    app.include_router(dashboard.router, prefix=settings.api_prefix)
+    app.include_router(sessions.router, prefix=settings.api_prefix)
 
     # 统一异常处理（08 §7 错误码规范）
     register_exception_handlers(app)

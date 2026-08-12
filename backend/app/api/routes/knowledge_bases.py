@@ -23,10 +23,10 @@ router = APIRouter(prefix="/knowledge-bases", tags=["knowledge-bases"])
 
 @router.get("", response_model=ResponseModel[list[KnowledgeBaseOut]])
 async def list_knowledge_bases(
-    _: User = Depends(require_roles(Role.ADMIN, Role.AGENT)),
+    user: User = Depends(require_roles(Role.ADMIN, Role.AGENT)),
     db: AsyncSession = Depends(get_db),
 ) -> ResponseModel:
-    return ok(data=await knowledge_service.list_knowledge_bases(db))
+    return ok(data=await knowledge_service.list_knowledge_bases(db, user))
 
 
 @router.post("", response_model=ResponseModel[KnowledgeBaseOut])
@@ -77,4 +77,3 @@ async def delete_knowledge_base(
         db, kb_id, user, ip=request.client.host if request.client else None
     )
     return ok(message="删除成功")
-

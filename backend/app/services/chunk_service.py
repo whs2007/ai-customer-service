@@ -35,6 +35,37 @@ async def list_chunks(
     return list(result.scalars().all()), total
 
 
+async def get_citations_by_chunk_ids(
+    db: AsyncSession, chunk_ids: list[uuid.UUID]
+) -> dict[uuid.UUID, dict]:
+    """按 Chunk ID 批量反查引用明细（会话恢复用，08 §4.4 / 10 §4.2）。
+
+    返回与检索 hit 同构的 dict（检索/重排分数历史值不在 chunks 表，置 None，
+    前端按无分数展示；精确分数可从 trace_logs 回溯，后续版本可补）。
+    """
+    if not chunk_ids:
+        return {}
+    result = await db.execute(
+        select(Chunk, Document.file_name)
+        .join(Document, Document.id == Chunk.doc_id)
+        .where(Chunk.id.in_(chunk_ids))
+    )
+    out: dict[uuid.UUID, dict] = {}
+    for chunk, file_name in result.all():
+        out[chunk.id] = {
+            "chunk_id": chunk.id,
+            "kb_id": chunk.kb_id,
+            "document_name": file_name,
+            "page": chunk.page,
+            "row": chunk.row,
+            "question": chunk.question,
+            "answer": chunk.answer,
+            "retrieval_score": None,
+            "rerank_score": None,
+        }
+    return out
+
+
 async def get_chunk(db: AsyncSession, chunk_id: uuid.UUID) -> Chunk:
     chunk = await db.get(Chunk, chunk_id)
     if chunk is None:
@@ -114,4 +145,3 @@ async def delete_chunk(db: AsyncSession, chunk_id: uuid.UUID) -> None:
     if doc is not None:
         doc.chunk_count = max(0, doc.chunk_count - 1)
     await db.commit()
-

@@ -26,11 +26,19 @@ def _clean_tags(tags: list[str] | None) -> list[str]:
 class KnowledgeBaseCreate(BaseModel):
     name: str = Field(min_length=1, max_length=50, description="名称（唯一，≤50 字）")
     description: str = Field(default="", max_length=200, description="描述（≤200 字）")
+    visibility: str = Field(
+        default="all", pattern="^(all|role|user)$", description="可见范围（00 §3 新增）"
+    )
+    visible_roles: list[str] = Field(default_factory=list, description="role 模式的可见角色")
+    visible_user_ids: list[str] = Field(default_factory=list, description="user 模式的可见用户 ID")
 
 
 class KnowledgeBaseUpdate(BaseModel):
     name: str = Field(min_length=1, max_length=50)
     description: str = Field(default="", max_length=200)
+    visibility: str | None = Field(default=None, pattern="^(all|role|user)$")
+    visible_roles: list[str] | None = Field(default=None)
+    visible_user_ids: list[str] | None = Field(default=None)
 
 
 class KnowledgeBaseOut(BaseModel):
@@ -131,4 +139,3 @@ class ChunkOut(BaseModel):
     tags: list[str]
     created_at: datetime
     updated_at: datetime
-

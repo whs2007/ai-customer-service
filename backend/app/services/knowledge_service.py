@@ -18,8 +18,10 @@ from app.schemas.knowledge import KnowledgeBaseCreate, KnowledgeBaseOut, Knowled
 from app.services.audit_service import write_audit
 
 
-async def list_knowledge_bases(db: AsyncSession) -> list[KnowledgeBaseOut]:
-    """列表（含文档数，排除软删除）。"""
+async def list_knowledge_bases(
+    db: AsyncSession, user: User | None = None
+) -> list[KnowledgeBaseOut]:
+    """列表（含文档数，排除软删除；非 admin 按可见范围过滤，00 §3）。"""
     stmt = (
         select(KnowledgeBase, func.count(Document.id).label("doc_count"))
         .outerjoin(
@@ -31,6 +33,12 @@ async def list_knowledge_bases(db: AsyncSession) -> list[KnowledgeBaseOut]:
         .order_by(KnowledgeBase.created_at.desc())
     )
     rows = (await db.execute(stmt)).all()
+    if user is not None and user.role != "admin":
+        rows = [
+            row
+            for row in rows
+            if _kb_visible(user, row[0].visibility, row[0].visible_roles, row[0].visible_user_ids)
+        ]
     return [
         KnowledgeBaseOut(
             id=kb.id,
@@ -62,6 +70,9 @@ async def create_knowledge_base(
     kb = KnowledgeBase(
         name=payload.name.strip(),
         description=payload.description.strip(),
+        visibility=payload.visibility or "all",
+        visible_roles=payload.visible_roles or [],
+        visible_user_ids=payload.visible_user_ids or [],
         created_by=user.id,
     )
     db.add(kb)
@@ -87,9 +98,31 @@ async def update_knowledge_base(
         raise ConflictError("该名称已存在")
     kb.name = payload.name.strip()
     kb.description = payload.description.strip()
+    if payload.visibility is not None:
+        kb.visibility = payload.visibility
+    if payload.visible_roles is not None:
+        kb.visible_roles = payload.visible_roles
+    if payload.visible_user_ids is not None:
+        kb.visible_user_ids = payload.visible_user_ids
     await db.commit()
     await db.refresh(kb)
     return kb
+
+
+def _kb_visible(
+    user: User,
+    visibility: str,
+    visible_roles: list,
+    visible_user_ids: list,
+) -> bool:
+    """资源级可见性判定（00 §3 新增，供列表与检索共用）。"""
+    if visibility == "all":
+        return True
+    if visibility == "role":
+        return user.role in (visible_roles or [])
+    if visibility == "user":
+        return str(user.id) in [str(x) for x in (visible_user_ids or [])]
+    return False
 
 
 async def delete_knowledge_base(
@@ -113,4 +146,3 @@ async def delete_knowledge_base(
         detail={"name": kb.name},
     )
     await db.commit()
-
