@@ -21,7 +21,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.api.routes import auth, chunks, documents, health, knowledge_bases, retrieval
+from app.api.routes import (
+    auth,
+    chat,
+    chunks,
+    documents,
+    feedbacks,
+    health,
+    knowledge_bases,
+    retrieval,
+    settings as settings_router,
+)
 from app.core.config import get_settings
 from app.core.exceptions import AppError, InternalError
 from app.core.logging import configure_logging
@@ -75,6 +85,9 @@ def create_app() -> FastAPI:
     app.include_router(documents.router, prefix=settings.api_prefix)
     app.include_router(chunks.router, prefix=settings.api_prefix)
     app.include_router(retrieval.router, prefix=settings.api_prefix)
+    app.include_router(chat.router, prefix=settings.api_prefix)
+    app.include_router(feedbacks.router, prefix=settings.api_prefix)
+    app.include_router(settings_router.router, prefix=settings.api_prefix)
 
     # 统一异常处理（08 §7 错误码规范）
     register_exception_handlers(app)

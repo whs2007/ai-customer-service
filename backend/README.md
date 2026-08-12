@@ -129,3 +129,20 @@ curl -X POST http://127.0.0.1:8000/api/retrieval/test \
   -H "Authorization: Bearer <token>" -H "Content-Type: application/json" \
   -d '{"kb_ids":["<kb_id>"],"query":"商品签收后几天可以退货？","top_k":3,"retriever_mode":"hybrid_rerank"}'
 ```
+
+## B4 智能应答交付范围
+
+- LangGraph 对话图：意图路由（订单/物流 → 工具 mock、政策 → RAG、投诉 → 转人工、其他 → 兜底升级）
+- `POST /api/chat` SSE 流式：message_start / token / citations / done / error（+ form 事件）
+- 转人工建单（TK+时间戳+随机），会话置 transferred；引用反馈 `POST /api/feedbacks`
+- 会话/消息/trace_logs 落库，`GET /api/sessions`、`GET /api/sessions/{id}` 恢复会话
+- 意图规则可配置（`/api/settings/intent`）；模型配置列表/默认切换（admin）
+- LLM 客户端：配置 `LLM_API_KEY` 走 OpenAI 兼容流式；未配置用 mock 生成
+
+SSE 示例：
+
+```bash
+curl -N -X POST http://127.0.0.1:8000/api/chat \
+  -H "Authorization: Bearer <token>" -H "Content-Type: application/json" \
+  -d '{"kb_ids":["<kb_id>"],"message":"商品签收后几天可以退货？"}'
+```

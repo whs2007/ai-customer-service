@@ -55,6 +55,12 @@ class Settings(BaseSettings):
     embedding_api_key: str = ""
     embedding_base_url: str = ""
 
+    # LLM 配置（08 §2：智谱 GLM 起步；未配置 Key 时使用模板化 mock 生成，便于离线开发）
+    llm_provider: str = "zhipu"
+    llm_model: str = "glm-4-flash"
+    llm_api_key: str = ""
+    llm_base_url: str = ""
+
     # 重排配置（08 §2/#15：密钥仅存 .env，不入代码库；B3 起使用）
     rerank_api_key: str = ""
     rerank_base_url: str = ""
