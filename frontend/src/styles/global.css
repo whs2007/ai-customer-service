@@ -1,0 +1,39 @@
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: #f5f6fa;
+  color: #1f2937;
+  font-family: -apple-system, "PingFang SC", "Microsoft YaHei", "Segoe UI",
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 页面通用排版（01 §4.2） */
+.page-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0;
+}
+
+.page-sub {
+  font-size: 13px;
+  color: #6b7280;
+  margin: 4px 0 0;
+}
+
+.page-content {
+  margin-top: 16px;
+}
+
+/* 数字使用等宽（01 §4.2） */
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
