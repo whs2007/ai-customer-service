@@ -173,3 +173,4 @@ curl -N -X POST http://127.0.0.1:8000/api/chat \
 - 安全：上传内容嗅探（拒绝伪装扩展名）+ 可插拔病毒扫描（默认关闭）；API Key Fernet 加密（JWT_SECRET 派生，旧数据懒迁移）；内容审核可插拔（本地敏感词兜底）
 - 可观测：`GET /metrics`（Prometheus：HTTP 延迟/错误、LLM token/成本、检索 P95、队列积压）；日志告警占位；`LOG_RETENTION_DAYS` 可配置
 - 性能抽测：`python scripts/perf_smoke.py --concurrency 50 --retrieval 30`
+- Redis 兼容：本机 Redis 5.0（Windows，RESP2）已适配（`core/redis.py` 指定 protocol=2）；启动后 `/health` 应显示 `redis: ok`。

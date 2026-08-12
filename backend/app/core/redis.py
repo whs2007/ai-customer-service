@@ -27,7 +27,11 @@ async def init_redis(settings: Settings) -> None:
         return
     try:
         _client = aioredis.from_url(
-            settings.redis_url, encoding="utf-8", decode_responses=True
+            settings.redis_url,
+            encoding="utf-8",
+            decode_responses=True,
+            # Redis 5.0（Windows 版）仅支持 RESP2；redis-py 8.x 默认 RESP3（HELLO）会握手失败
+            protocol=2,
         )
         await asyncio.wait_for(_client.ping(), timeout=1.0)
         logger.info("redis_connected", url=settings.redis_url)
@@ -64,4 +68,3 @@ async def ping_redis(timeout: float = 0.5) -> bool:
         return True
     except Exception:  # noqa: BLE001
         return False
-
