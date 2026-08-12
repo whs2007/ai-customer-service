@@ -29,8 +29,8 @@
 | B1 基建 | ✅ | 项目骨架、JWT + RBAC、统一响应/错误码、日志、/health |
 | B2 知识库 | ✅ | KB CRUD、上传解析（xlsx/csv/md/txt/pdf/docx）、Chunk 管理、向量化 |
 | B3 检索验证 | ✅ | pgvector 余弦 + tsvector 全文 RRF 融合、SiliconFlow 重排、多库权限 |
-| B4 智能应答 | ⏳ | LangGraph 对话、SSE、引用反馈、转人工（待实施） |
-| B4.5 评测 / B5 工单与统计 | ⏳ | 应用评测、会话记录、工单、看板（待实施） |
+| B4 智能应答 | ✅ | LangGraph 对话、SSE 流式、引用反馈、转人工、会话恢复 |
+| B4.5 评测 / B5 工单与统计 | ⏳ | 应用评测、工单列表、会话记录详情、看板（待实施） |
 | M1 前端框架 | ✅ | 9 菜单布局、路由、设计令牌、登录 |
 
 ## 快速开始
@@ -60,4 +60,3 @@ npm run dev          # http://localhost:5173，/api 代理到 127.0.0.1:8000
 
 - 所有密钥（RERANK_API_KEY、EMBEDDING_API_KEY、JWT_SECRET、数据库口令）只放 `.env`（已 gitignore），严禁写入代码、文档或日志。
 - 知识库文档为业务敏感数据：按知识库隔离权限、日志脱敏（规划）。
-
