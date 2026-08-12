@@ -36,6 +36,7 @@ import {
   getSession,
   listModelProfiles,
   listSessions,
+  retrievalCandidates,
   type ChatEvent,
   type ChatForm,
   type ChatFormField,
@@ -62,9 +63,11 @@ interface UiMessage {
   formSubmitted?: boolean;
   stopped?: boolean;
   error?: string;
+  citations?: Citation[];
 }
 
-function scoreColor(score: number): string {
+function scoreColor(score: number | null | undefined): string {
+  if (score == null) return 'default';
   if (score >= 70) return 'green';
   if (score >= 40) return 'orange';
   return 'red';
@@ -195,6 +198,8 @@ export default function ChatPage() {
   const [streaming, setStreaming] = useState(false);
   const [initializing, setInitializing] = useState(true);
   const [addCitationOpen, setAddCitationOpen] = useState(false);
+  const [candidates, setCandidates] = useState<Citation[]>([]);
+  const [candidatesLoading, setCandidatesLoading] = useState(false);
 
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -249,7 +254,11 @@ export default function ChatPage() {
       setSessionId(detail.session.id);
       setKbIds(detail.session.kb_ids ?? []);
       setMessages(detail.messages);
-      setCitations([]);
+      // 会话恢复：面板展示最后一条带引用的 assistant 消息（10 §4.2）
+      const lastCited = [...detail.messages]
+        .reverse()
+        .find((m) => m.role === 'assistant' && (m.citations ?? []).length > 0);
+      setCitations(lastCited?.citations ?? []);
       setStreaming(false);
     } catch (err) {
       message.error(err instanceof ApiError ? err.message : '会话加载失败');
@@ -299,7 +308,6 @@ export default function ChatPage() {
       { id: 'streaming', role: 'assistant', content: '', form: null },
     ]);
     setStreaming(true);
-    setCitations([]);
     setInput('');
 
     const controller = new AbortController();
@@ -323,31 +331,42 @@ export default function ChatPage() {
         );
       } else if (ev.event === 'citations') {
         setCitations(ev.data.citations);
-      } else if (ev.event === 'done') {
-        messageIdRef.current = ev.data.message_id;
         setMessages((msgs) =>
           msgs.map((m) =>
-            m.id === 'streaming'
-              ? {
-                  ...m,
-                  id: ev.data.message_id,
-                  intent: ev.data.intent,
-                  formSubmitted: false,
-                }
-              : m,
+            m.id === 'streaming' ? { ...m, citations: ev.data.citations } : m,
           ),
         );
-        if (ev.data.ticket_no) {
-          setMessages((msgs) => [
-            ...msgs.map((m) => (m.id === 'streaming' ? { ...m, id: ev.data.message_id } : m)),
-            {
-              id: `sys-${Date.now()}`,
-              role: 'system',
-              content: `已为您转接人工客服，工单号 ${ev.data.ticket_no}，请稍候`,
-              intent: 'transfer',
-            },
-          ]);
+      } else if (ev.event === 'done') {
+        if (ev.data.message_id) {
+          messageIdRef.current = ev.data.message_id;
         }
+        setMessages((msgs) => {
+          // 转人工等无回答文本时（message_id 为空）：移除空的 streaming 气泡
+          const base = ev.data.message_id
+            ? msgs.map((m) =>
+                m.id === 'streaming'
+                  ? {
+                      ...m,
+                      id: ev.data.message_id ?? 'streaming',
+                      intent: ev.data.intent,
+                      formSubmitted: false,
+                    }
+                  : m,
+              )
+            : msgs.filter((m) => m.id !== 'streaming');
+          if (ev.data.ticket_no) {
+            return [
+              ...base,
+              {
+                id: `sys-${Date.now()}`,
+                role: 'system',
+                content: `已为您转接人工客服，工单号 ${ev.data.ticket_no}，请稍候`,
+                intent: 'transfer',
+              },
+            ];
+          }
+          return base;
+        });
         setStreaming(false);
         void refreshSessions();
       } else if (ev.event === 'error') {
@@ -419,9 +438,45 @@ export default function ChatPage() {
       message.success('反馈已记录');
       if (action === 'delete') {
         setCitations((list) => list.filter((c) => c.chunk_id !== citation.chunk_id));
+        setMessages((msgs) =>
+          msgs.map((m) =>
+            m.id === messageIdRef.current
+              ? {
+                  ...m,
+                  citations: (m.citations ?? []).filter(
+                    (c) => c.chunk_id !== citation.chunk_id,
+                  ),
+                }
+              : m,
+          ),
+        );
       }
     } catch (err) {
       message.error(err instanceof ApiError ? err.message : '反馈失败');
+    }
+  };
+
+  const openAddCitation = async () => {
+    setAddCitationOpen(true);
+    const lastUser = [...messages].reverse().find((m) => m.role === 'user');
+    if (!lastUser || kbIds.length === 0) {
+      setCandidates([]);
+      return;
+    }
+    try {
+      setCandidatesLoading(true);
+      const data = await retrievalCandidates({
+        kb_ids: kbIds,
+        query: lastUser.content,
+        top_n: 20,
+      });
+      const cited = new Set(citations.map((c) => c.chunk_id));
+      setCandidates(data.hits.filter((h) => !cited.has(h.chunk_id)));
+    } catch (err) {
+      message.error(err instanceof ApiError ? err.message : '候选加载失败');
+      setCandidates([]);
+    } finally {
+      setCandidatesLoading(false);
     }
   };
 
@@ -645,7 +700,7 @@ export default function ChatPage() {
             <Button
               type="link"
               size="small"
-              onClick={() => setAddCitationOpen(true)}
+              onClick={() => void openAddCitation()}
             >
               补充引用
             </Button>
@@ -686,7 +741,9 @@ export default function ChatPage() {
                   {c.answer}
                 </Typography.Paragraph>
                 <Space size={6} wrap>
-                  <Tag color={scoreColor(c.retrieval_score)}>检索 {c.retrieval_score}%</Tag>
+                  <Tag color={scoreColor(c.retrieval_score)}>
+                    检索 {c.retrieval_score != null ? `${c.retrieval_score}%` : '—'}
+                  </Tag>
                   {c.rerank_score != null && (
                     <Tag color="purple">重排 {c.rerank_score.toFixed(4)}</Tag>
                   )}
@@ -734,46 +791,65 @@ export default function ChatPage() {
         </div>
       </div>
 
-      {/* 补充引用弹窗（B4 简化：候选池为当前引用列表） */}
+      {/* 补充引用弹窗（03 §4.4：候选来自混合检索 top20，剔除当前引用） */}
       <Modal
         title="补充引用"
         open={addCitationOpen}
         onCancel={() => setAddCitationOpen(false)}
         footer={null}
-        width={420}
+        width={480}
       >
         <Alert
           type="info"
           showIcon
           style={{ marginBottom: 12 }}
-          message="B4 简化：候选池为当前回答的引用列表；完整候选接口后续版本提供。"
+          message="候选按最近一次用户问题混合检索召回（top20），已剔除当前引用。"
         />
-        {citations.map((c) => (
-          <div
-            key={c.chunk_id}
-            style={{
-              border: '1px solid #E5E7EB',
-              borderRadius: 8,
-              padding: 8,
-              marginBottom: 8,
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-            }}
-          >
-            <span style={{ fontSize: 13 }}>{c.question}</span>
-            <Button
-              type="link"
-              size="small"
-              onClick={() => {
-                void sendFeedback('add', c);
-                setAddCitationOpen(false);
+        {candidatesLoading ? (
+          <div style={{ textAlign: 'center', padding: 24 }}>
+            <Spin />
+          </div>
+        ) : candidates.length === 0 ? (
+          <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description="没有可补充的候选片段"
+          />
+        ) : (
+          candidates.map((c) => (
+            <div
+              key={c.chunk_id}
+              style={{
+                border: '1px solid #E5E7EB',
+                borderRadius: 8,
+                padding: 8,
+                marginBottom: 8,
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                gap: 8,
               }}
             >
-              补充
-            </Button>
-          </div>
-        ))}
+              <span style={{ fontSize: 13, flex: 1 }}>
+                {c.question}
+                <span style={{ color: '#9CA3AF', fontSize: 12 }}>
+                  {' '}
+                  · {c.document_name}
+                  {c.page ? ` · ${c.page}` : ''}
+                </span>
+              </span>
+              <Button
+                type="link"
+                size="small"
+                onClick={() => {
+                  void sendFeedback('add', c);
+                  setAddCitationOpen(false);
+                }}
+              >
+                补充
+              </Button>
+            </div>
+          ))
+        )}
       </Modal>
     </div>
   );

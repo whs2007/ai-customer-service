@@ -8,17 +8,18 @@ import AppLayout from '../layouts/AppLayout';
 import RequireAuth from '../layouts/RequireAuth';
 
 const Login = lazy(() => import('../pages/Login'));
-const Dashboard = lazy(() => import('../pages/Dashboard'));
+const DashboardPage = lazy(() => import('../pages/DashboardPage'));
 const Chat = lazy(() => import('../pages/Chat'));
 const KnowledgeLayout = lazy(() => import('../pages/knowledge/KnowledgeLayout'));
 const KnowledgeEmpty = lazy(() => import('../pages/knowledge/KnowledgeEmpty'));
 const DocumentsPanel = lazy(() => import('../pages/knowledge/DocumentsPanel'));
 const ChunkDetailPage = lazy(() => import('../pages/knowledge/ChunkDetailPage'));
 const RecallTest = lazy(() => import('../pages/RecallTest'));
-const Tickets = lazy(() => import('../pages/Tickets'));
-const Evaluation = lazy(() => import('../pages/Evaluation'));
-const Sessions = lazy(() => import('../pages/Sessions'));
-const SessionDetail = lazy(() => import('../pages/SessionDetail'));
+const TicketsPage = lazy(() => import('../pages/TicketsPage'));
+const EvaluationPage = lazy(() => import('../pages/evaluation/EvaluationPage'));
+const EvalReportPage = lazy(() => import('../pages/evaluation/ReportPage'));
+const SessionsPage = lazy(() => import('../pages/SessionsPage'));
+const SessionDetailPage = lazy(() => import('../pages/sessions/SessionDetailPage'));
 const Settings = lazy(() => import('../pages/Settings'));
 const Help = lazy(() => import('../pages/Help'));
 const NotFound = lazy(() => import('../pages/NotFound'));
@@ -42,7 +43,7 @@ export const router = createBrowserRouter([
         element: <AppLayout />,
         children: [
           { index: true, element: <Navigate to="/dashboard" replace /> },
-          { path: 'dashboard', element: withSuspense(<Dashboard />) },
+          { path: 'dashboard', element: withSuspense(<DashboardPage />) },
           { path: 'chat', element: withSuspense(<Chat />) },
           {
             path: 'knowledge',
@@ -57,10 +58,14 @@ export const router = createBrowserRouter([
             ],
           },
           { path: 'recall-test', element: withSuspense(<RecallTest />) },
-          { path: 'tickets', element: withSuspense(<Tickets />) },
-          { path: 'evaluation', element: withSuspense(<Evaluation />) },
-          { path: 'sessions', element: withSuspense(<Sessions />) },
-          { path: 'sessions/:id', element: withSuspense(<SessionDetail />) },
+          { path: 'tickets', element: withSuspense(<TicketsPage />) },
+          { path: 'evaluation', element: withSuspense(<EvaluationPage />) },
+          {
+            path: 'evaluation/tasks/:taskId/report',
+            element: withSuspense(<EvalReportPage />),
+          },
+          { path: 'sessions', element: withSuspense(<SessionsPage />) },
+          { path: 'sessions/:id', element: withSuspense(<SessionDetailPage />) },
           { path: 'settings', element: withSuspense(<Settings />) },
           { path: 'help', element: withSuspense(<Help />) },
           { path: '*', element: withSuspense(<NotFound />) },

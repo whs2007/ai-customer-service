@@ -20,6 +20,7 @@ export interface ChatMessage {
   content: string;
   intent: string | null;
   cited_chunk_ids: string[];
+  citations?: Citation[];
   created_at: string;
 }
 
@@ -31,7 +32,7 @@ export interface Citation {
   row: string | null;
   question: string;
   answer: string;
-  retrieval_score: number;
+  retrieval_score: number | null;
   rerank_score: number | null;
 }
 
@@ -70,7 +71,7 @@ export type ChatEvent =
   | { event: 'citations'; data: { citations: Citation[] } }
   | {
       event: 'done';
-      data: { message_id: string; intent: string | null; ticket_no: string | null; session_id: string };
+      data: { message_id: string | null; intent: string | null; ticket_no: string | null; session_id: string };
     }
   | { event: 'error'; data: { code: string; message: string } };
 
@@ -144,6 +145,15 @@ export function getSession(id: string): Promise<{ session: ChatSession; messages
   return request({ url: `/sessions/${id}`, method: 'GET' });
 }
 
+/** 补充引用候选（03 §4.4：从候选片段中选择，08 §6.2 新增）。 */
+export function retrievalCandidates(payload: {
+  kb_ids: string[];
+  query: string;
+  top_n?: number;
+}): Promise<{ query: string; top_n: number; hits: Citation[] }> {
+  return request({ url: '/retrieval/candidates', method: 'POST', data: payload });
+}
+
 export function createFeedback(payload: {
   session_id: string;
   message_id: string;
@@ -157,4 +167,3 @@ export function createFeedback(payload: {
 export function listModelProfiles(): Promise<ModelProfile[]> {
   return request({ url: '/settings/model-profiles', method: 'GET' });
 }
-
