@@ -19,6 +19,12 @@ dist/
 # 运行时数据
 backend/storage/
 
+# 日志与本地临时文件
+*.log
+cropped/
+crop_*.py
+shark_cloud_app.jsx
+
 # 系统文件
 .DS_Store
 Thumbs.db

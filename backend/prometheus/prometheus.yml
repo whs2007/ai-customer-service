@@ -1,0 +1,13 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: ai-customer-service
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["api:8000"]
+    # 与后端 METRICS_TOKEN 对应（entrypoint 启动时从环境变量替换并写回）
+    authorization:
+      type: Bearer
+      credentials: __METRICS_TOKEN__

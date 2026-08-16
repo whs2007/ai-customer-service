@@ -4,6 +4,7 @@ import { Tabs } from 'antd';
 
 import AccessTab from './settings/AccessTab';
 import AuditTab from './settings/AuditTab';
+import ChannelConfigTab from './settings/ChannelConfigTab';
 import DataTab from './settings/DataTab';
 import ModelTab from './settings/ModelTab';
 import PromptTab from './settings/PromptTab';
@@ -21,6 +22,7 @@ export default function SettingsPage() {
             { key: 'prompt', label: 'Prompt 配置', children: <PromptTab /> },
             { key: 'rules', label: '客服规则', children: <RulesTab /> },
             { key: 'access', label: '账号权限', children: <AccessTab /> },
+            { key: 'channel', label: '渠道配置', children: <ChannelConfigTab /> },
             { key: 'audit', label: '日志审计', children: <AuditTab /> },
             { key: 'data', label: '数据管理', children: <DataTab /> },
           ]}
@@ -29,4 +31,3 @@ export default function SettingsPage() {
     </div>
   );
 }
-

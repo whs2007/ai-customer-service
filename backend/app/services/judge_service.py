@@ -6,7 +6,6 @@
 
 from __future__ import annotations
 
-import json
 import re
 
 import httpx
@@ -23,7 +22,7 @@ PASS_THRESHOLD = 60  # 通过阈值（百分比）
 def _bigrams(text: str) -> set[str]:
     chars = [c for c in text if not c.isspace()]
     grams = set(chars)
-    grams.update(f"{a}{b}" for a, b in zip(chars, chars[1:]))
+    grams.update(f"{a}{b}" for a, b in zip(chars, chars[1:], strict=False))
     return grams
 
 

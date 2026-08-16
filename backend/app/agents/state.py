@@ -21,6 +21,7 @@ class ChatState(TypedDict, total=False):
     order_info: dict | None       # 订单查询结果（MVP mock）
     ticket: dict | None           # 转人工工单
     model_profile_id: str | None
+    model_name: str
     eval_mode: bool                # 评测模式：转人工不真实建单（B4.5 新增）
     answer: str
     queue: Any                    # asyncio.Queue：SSE 事件中转

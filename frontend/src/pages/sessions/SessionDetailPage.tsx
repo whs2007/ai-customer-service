@@ -21,6 +21,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 
 import { ApiError } from '../../api/client';
 import { listEvalSets } from '../../api/evaluation';
+import { useAuthStore } from '../../stores/auth';
 import {
   INTENT_LABELS,
   annotateSession,
@@ -31,6 +32,8 @@ export default function SessionDetailPage() {
   const { id = '' } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const user = useAuthStore((s) => s.user);
+  const isAgent = user?.role === 'agent';
   const [tags, setTags] = useState<string[]>([]);
   const [note, setNote] = useState('');
   const [includeInEval, setIncludeInEval] = useState(false);
@@ -62,7 +65,8 @@ export default function SessionDetailPage() {
         tags,
         note,
         include_in_eval: includeInEval,
-        eval_set_id: includeInEval ? evalSetId : null,
+        // 职责分离（方案 C）：客服标注不指定评测集，仅产生候选由管理员确认
+        eval_set_id: includeInEval && !isAgent ? evalSetId : null,
       }),
     onSuccess: () => {
       message.success('标注已保存');
@@ -245,13 +249,19 @@ export default function SessionDetailPage() {
                 <span style={{ fontSize: 13 }}>纳入评测集</span>
               </Space>
               {includeInEval && (
-                <Select
-                  style={{ width: '100%', marginTop: 8 }}
-                  placeholder="选择目标评测集（可选）"
-                  value={evalSetId ?? undefined}
-                  onChange={setEvalSetId}
-                  options={evalSets.map((s) => ({ value: s.id, label: `${s.name}（${s.sample_count}）` }))}
-                />
+                isAgent ? (
+                  <div style={{ fontSize: 12, color: '#9CA3AF', marginTop: 8 }}>
+                    客服标注将进入评测集候选，由管理员确认入集
+                  </div>
+                ) : (
+                  <Select
+                    style={{ width: '100%', marginTop: 8 }}
+                    placeholder="选择目标评测集（可选）"
+                    value={evalSetId ?? undefined}
+                    onChange={setEvalSetId}
+                    options={evalSets.map((s) => ({ value: s.id, label: `${s.name}（${s.sample_count}）` }))}
+                  />
+                )
               )}
             </div>
             <Button

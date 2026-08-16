@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from decimal import Decimal
 
 import structlog
 from sqlalchemy import delete, func, select
@@ -12,6 +13,7 @@ from app.agents.graph import chat_graph
 from app.agents.state import ChatState
 from app.core.config import get_settings
 from app.core.exceptions import BadRequestError, ConflictError, NotFoundError
+from app.core.metrics import TASK_FAILURES
 from app.models.eval_candidate import EvalCandidate, EvalCandidateStatus
 from app.models.eval_result import EvalResult
 from app.models.eval_sample import EvalSample
@@ -27,7 +29,6 @@ from app.schemas.evaluation import (
 )
 from app.services import model_profile_service
 from app.services.judge_service import PASS_THRESHOLD, judge_answer
-from app.core.metrics import TASK_FAILURES
 
 logger: structlog.stdlib.BoundLogger = structlog.get_logger(__name__)
 
@@ -265,6 +266,7 @@ async def run_eval_task(task_id: str) -> None:
                 }
                 if profile:
                     state["model_name"] = profile.model
+                    state["model_profile_id"] = str(profile.id)
                 result = await chat_graph.ainvoke(state)
                 answer = result.get("answer", "")
                 citations = [
@@ -312,7 +314,7 @@ async def run_eval_task(task_id: str) -> None:
                 await db.commit()
 
             avg = round(avg_sum / total, 2) if total else 0.0
-            task.score_avg = avg
+            task.score_avg = Decimal(str(avg))
             task.metrics = {
                 "accuracy": avg,
                 "pass_rate": round(passed_count / total * 100, 2) if total else 0.0,
@@ -471,7 +473,7 @@ async def update_result_passed(
             avg_sum = sum(float(r.scores.get("accuracy") or 0.0) for r in rows)
             passed_count = sum(1 for r in rows if r.passed)
             avg = round(avg_sum / total, 2)
-            task.score_avg = avg
+            task.score_avg = Decimal(str(avg))
             task.metrics = {
                 "accuracy": avg,
                 "pass_rate": round(passed_count / total * 100, 2),

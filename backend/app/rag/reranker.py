@@ -23,6 +23,10 @@ class RerankClient:
         """未配置 Key/模型时不可用（调用方降级为混合检索）。"""
         return bool(self.settings.rerank_api_key and self.settings.rerank_model)
 
+    @property
+    def model_name(self) -> str:
+        return self.settings.rerank_model or ""
+
     async def rerank(
         self, query: str, documents: list[str], top_n: int | None = None
     ) -> list[float]:
@@ -61,4 +65,3 @@ class RerankClient:
             for i, item in enumerate(results)
         }
         return [indexed.get(i, 0.0) for i in range(len(documents))]
-

@@ -1,6 +1,7 @@
-/** 客服工单页（06 / sessions.html 联动）：筛选、列表、详情抽屉、状态流转。 */
+/** 客服工单页（06 / sessions.html 联动）：筛选、列表、详情抽屉（只读管理视图）。
+ * 工单处理（认领/回复/关闭/释放）统一在客服工作台完成，管理端不再提供写操作。 */
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import {
   Button,
   Card,
@@ -15,14 +16,13 @@ import {
   Tag,
   Timeline,
   Tooltip,
-  message,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { ApiError } from '../api/client';
-import { getTicket, listTickets, ticketAction, type TicketItem } from '../api/tickets';
+import { getTicket, listTickets, type TicketItem } from '../api/tickets';
+import { useAuthStore } from '../stores/auth';
 
 const STATUS_TAG: Record<string, { color: string; label: string }> = {
   open: { color: 'orange', label: '待处理' },
@@ -37,7 +37,7 @@ const PRIORITY_TAG: Record<string, { color: string; label: string }> = {
 
 export default function TicketsPage() {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
+  const user = useAuthStore((s) => s.user);
   const [keyword, setKeyword] = useState('');
   const [debounced, setDebounced] = useState('');
   const [status, setStatus] = useState<string | undefined>();
@@ -45,7 +45,6 @@ export default function TicketsPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [detailId, setDetailId] = useState<string | null>(null);
-  const [note, setNote] = useState('');
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(keyword.trim()), 300);
@@ -68,20 +67,6 @@ export default function TicketsPage() {
     queryKey: ['ticket', detailId],
     queryFn: () => (detailId ? getTicket(detailId) : Promise.resolve(null)),
     enabled: Boolean(detailId),
-  });
-
-  const actionMutation = useMutation({
-    mutationFn: (action: 'start' | 'close') => {
-      if (!detailId) throw new Error('缺少工单');
-      return ticketAction(detailId, { action, note });
-    },
-    onSuccess: () => {
-      message.success('操作成功');
-      setNote('');
-      queryClient.invalidateQueries({ queryKey: ['tickets'] });
-      queryClient.invalidateQueries({ queryKey: ['ticket', detailId] });
-    },
-    onError: (err) => message.error(err instanceof ApiError ? err.message : '操作失败'),
   });
 
   const columns: ColumnsType<TicketItem> = [
@@ -117,12 +102,12 @@ export default function TicketsPage() {
       render: (v: string) => v.replace('T', ' ').slice(0, 19),
     },
     {
-      title: '操作',
+      title: '查看',
       key: 'actions',
       width: 100,
       render: (_, t) => (
         <Button type="link" size="small" onClick={() => setDetailId(t.id)}>
-          查看/处理
+          查看详情
         </Button>
       ),
     },
@@ -276,36 +261,16 @@ export default function TicketsPage() {
               }))}
             />
 
-            {detail.status !== 'closed' && (
+            {user?.role === 'agent' && (
               <div style={{ marginTop: 16 }}>
-                <Input.TextArea
-                  rows={3}
-                  placeholder="备注 / 处理结果"
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                  maxLength={500}
-                />
-                <Space style={{ marginTop: 12 }}>
-                  {detail.status === 'open' && (
-                    <Button
-                      type="primary"
-                      loading={actionMutation.isPending}
-                      onClick={() => actionMutation.mutate('start')}
-                    >
-                      开始处理
-                    </Button>
-                  )}
-                  {detail.status === 'processing' && (
-                    <Button
-                      type="primary"
-                      danger
-                      loading={actionMutation.isPending}
-                      onClick={() => actionMutation.mutate('close')}
-                    >
-                      关闭工单
-                    </Button>
-                  )}
-                </Space>
+                <Button type="primary" onClick={() => navigate('/workbench')}>
+                  前往客服工作台处理
+                </Button>
+              </div>
+            )}
+            {user?.role === 'admin' && (
+              <div style={{ color: '#9CA3AF', fontSize: 13, marginTop: 16 }}>
+                管理员只读：工单处理（认领/回复/关闭）由客服账号在客服工作台完成
               </div>
             )}
           </>

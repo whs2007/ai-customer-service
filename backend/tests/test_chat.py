@@ -175,31 +175,35 @@ async def test_complaint_creates_ticket(client: AsyncClient, admin_headers):
 
 
 @pytest.mark.asyncio
-async def test_fallback_twice_escalates(client: AsyncClient, admin_headers):
+async def test_nonsense_replies_without_escalation(
+    client: AsyncClient, admin_headers
+):
+    """胡话/无关内容：知识库未命中时由 LLM 自然回复，不自动转人工。"""
     kb = await _make_kb(client, admin_headers, f"B4B_{uuid.uuid4().hex[:8]}")
-    events1 = await chat_events(
-        client, admin_headers, {"kb_ids": [kb["id"]], "message": "哈哈哈哈哈哈"}
-    )
-    grouped1 = events_dict(events1)
-    assert grouped1["done"][0]["intent"] == "other"
-    assert grouped1["done"][0]["ticket_no"] is None
-    session_id = grouped1["done"][0]["session_id"]
-
-    events2 = await chat_events(
-        client,
-        admin_headers,
-        {"session_id": session_id, "kb_ids": [kb["id"]], "message": "哈哈哈哈哈哈"},
-    )
-    grouped2 = events_dict(events2)
-    assert grouped2["done"][0]["intent"] == "other"
-    assert grouped2["done"][0]["ticket_no"]
+    session_id = None
+    for _ in range(2):
+        payload: dict = {"kb_ids": [kb["id"]], "message": "哈哈哈哈哈哈"}
+        if session_id:
+            payload["session_id"] = session_id
+        events = await chat_events(client, admin_headers, payload)
+        grouped = events_dict(events)
+        done = grouped["done"][0]
+        assert done["intent"] == "other"
+        assert done["ticket_no"] is None
+        session_id = done["session_id"]
 
     detail = await client.get(f"/api/sessions/{session_id}", headers=admin_headers)
-    assert detail.json()["data"]["session"]["status"] == "transferred"
+    data = detail.json()["data"]
+    assert data["session"]["status"] == "active"
+    messages = data["messages"]
+    assert messages[-1]["role"] == "assistant"
+    assert messages[-1]["content"].strip()
 
 
 @pytest.mark.asyncio
-async def test_transferred_session_blocks_chat(client: AsyncClient, admin_headers):
+async def test_transferred_session_accepts_messages_without_reply(
+    client: AsyncClient, admin_headers
+):
     kb = await _make_kb(client, admin_headers, f"B4T_{uuid.uuid4().hex[:8]}")
     events = await chat_events(
         client, admin_headers, {"kb_ids": [kb["id"]], "message": "转人工"}
@@ -211,8 +215,17 @@ async def test_transferred_session_blocks_chat(client: AsyncClient, admin_header
         {"session_id": session_id, "kb_ids": [kb["id"]], "message": "再问一句"},
     )
     grouped2 = events_dict(events2)
-    assert "error" in grouped2
-    assert grouped2["error"][0]["code"] == "40000"
+    # 转人工后不锁死会话：消息正常入库、AI 不再回复、不报错
+    assert "error" not in grouped2
+    done2 = grouped2["done"][0]
+    assert done2["message_id"] is None
+    assert done2["ticket_no"] is None
+    assert done2["intent"] == "transfer"
+
+    detail = await client.get(f"/api/sessions/{session_id}", headers=admin_headers)
+    messages = detail.json()["data"]["messages"]
+    assert messages[-1]["role"] == "user"
+    assert messages[-1]["content"] == "再问一句"
 
 
 @pytest.mark.asyncio
@@ -295,6 +308,25 @@ async def test_model_profiles_admin_only(client: AsyncClient, user_headers, admi
     resp = await client.get("/api/settings/model-profiles", headers=viewer)
     assert resp.status_code == 403
 
+    # 用例自建配置（测试库会话级清理后不再依赖历史残留数据）
+    created = await client.post(
+        "/api/settings/model-profiles",
+        headers=admin_headers,
+        json={
+            "name": "profile_admin_only",
+            "provider": "zhipu",
+            "model": "glm-4-flash",
+            "base_url": "",
+            "api_key": "sk-test-key",
+            "temperature": 0.7,
+            "top_p": 0.9,
+            "max_tokens": 2048,
+            "role": "chat",
+            "is_default": False,
+            "enabled": True,
+        },
+    )
+    assert created.status_code == 200
     profiles = await client.get("/api/settings/model-profiles", headers=admin_headers)
     assert profiles.status_code == 200
     items = profiles.json()["data"]
@@ -317,4 +349,3 @@ async def test_chat_rbac(client: AsyncClient, user_headers):
         json={"kb_ids": [str(uuid.uuid4())], "message": "测试"},
     )
     assert resp.status_code == 403
-

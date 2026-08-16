@@ -27,12 +27,15 @@ import {
   updateKnowledgeBase,
   type KnowledgeBase,
 } from '../../api/knowledge';
+import { useAuthStore } from '../../stores/auth';
 import KnowledgeBaseModal from './KnowledgeBaseModal';
 
 export default function KnowledgeLayout() {
   const navigate = useNavigate();
   const { kbId } = useParams();
   const queryClient = useQueryClient();
+  // 职责分离（方案 B）：agent 只读知识库，写操作仅 admin
+  const readonly = useAuthStore((s) => s.user)?.role === 'agent';
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<KnowledgeBase | null>(null);
 
@@ -128,17 +131,19 @@ export default function KnowledgeLayout() {
           <Typography.Text strong style={{ fontSize: 15 }}>
             知识库
           </Typography.Text>
-          <Button
-            type="primary"
-            size="small"
-            icon={<PlusOutlined />}
-            onClick={() => {
-              setEditing(null);
-              setModalOpen(true);
-            }}
-          >
-            创建
-          </Button>
+          {!readonly && (
+            <Button
+              type="primary"
+              size="small"
+              icon={<PlusOutlined />}
+              onClick={() => {
+                setEditing(null);
+                setModalOpen(true);
+              }}
+            >
+              创建
+            </Button>
+          )}
         </div>
         {isLoading ? (
           <Skeleton active paragraph={{ rows: 5 }} />
@@ -146,7 +151,9 @@ export default function KnowledgeLayout() {
           <Empty
             image={Empty.PRESENTED_IMAGE_SIMPLE}
             description={
-              <span style={{ fontSize: 12, color: '#9CA3AF' }}>暂无知识库，点击上方创建</span>
+              <span style={{ fontSize: 12, color: '#9CA3AF' }}>
+                {readonly ? '暂无知识库' : '暂无知识库，点击上方创建'}
+              </span>
             }
           />
         ) : (
@@ -169,7 +176,7 @@ export default function KnowledgeLayout() {
                     borderLeft: active ? '3px solid #3B82F6' : '3px solid transparent',
                   }}
                   actions={
-                    active
+                    active && !readonly
                       ? [
                           <EditOutlined
                             key="edit"
@@ -222,4 +229,3 @@ export default function KnowledgeLayout() {
     </div>
   );
 }
-

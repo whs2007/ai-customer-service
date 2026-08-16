@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime, time, timezone
+from datetime import UTC, date, datetime, time
 
 from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_db, require_roles
+from app.api.deps import get_db, require_roles, require_ticket_operator
 from app.core.response import PageData, ResponseModel, ok
 from app.models.user import Role, User
 from app.services import ticket_service
@@ -29,7 +29,7 @@ def _parse_date(value: date) -> datetime:
 
     tz = ZoneInfo("Asia/Shanghai")
     local = datetime.combine(value, time.min, tzinfo=tz)
-    return local.astimezone(timezone.utc)
+    return local.astimezone(UTC)
 
 
 @router.get("", response_model=ResponseModel[PageData[dict]])
@@ -41,7 +41,7 @@ async def list_tickets(
     keyword: str | None = Query(default=None, max_length=100, description="编号/内容关键词"),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=10, ge=1, le=100),
-    _: User = Depends(require_roles(Role.ADMIN, Role.AGENT, Role.VIEWER)),
+    _: User = Depends(require_roles(Role.ADMIN, Role.AGENT)),
     db: AsyncSession = Depends(get_db),
 ) -> ResponseModel:
     items, total = await ticket_service.list_tickets(
@@ -51,7 +51,7 @@ async def list_tickets(
         start_date=_parse_date(start_date) if start_date else None,
         end_date=(
             datetime.combine(end_date, time.max, tzinfo=__import__("zoneinfo").ZoneInfo("Asia/Shanghai"))
-            .astimezone(timezone.utc)
+            .astimezone(UTC)
             if end_date
             else None
         ),
@@ -81,7 +81,7 @@ async def list_tickets(
 @router.get("/{ticket_id}", response_model=ResponseModel)
 async def get_ticket(
     ticket_id: uuid.UUID,
-    _: User = Depends(require_roles(Role.ADMIN, Role.AGENT, Role.VIEWER)),
+    _: User = Depends(require_roles(Role.ADMIN, Role.AGENT)),
     db: AsyncSession = Depends(get_db),
 ) -> ResponseModel:
     return ok(data=await ticket_service.get_ticket_detail(db, ticket_id))
@@ -92,7 +92,7 @@ async def ticket_action(
     ticket_id: uuid.UUID,
     payload: TicketAction,
     request: Request,
-    user: User = Depends(require_roles(Role.ADMIN, Role.AGENT)),
+    user: User = Depends(require_ticket_operator()),
     db: AsyncSession = Depends(get_db),
 ) -> ResponseModel:
     ticket = await ticket_service.transition_ticket(
@@ -107,6 +107,7 @@ async def ticket_action(
         target_id=str(ticket_id),
         detail={"ticket_no": ticket.ticket_no, "status": ticket.status, "note": payload.note[:200]},
     )
+    await db.commit()
     return ok(
         data={
             "id": str(ticket.id),
@@ -115,4 +116,3 @@ async def ticket_action(
         },
         message="操作成功",
     )
-

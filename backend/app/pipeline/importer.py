@@ -9,14 +9,14 @@ import structlog
 from sqlalchemy import delete
 
 from app.core.config import get_settings
+from app.core.metrics import TASK_FAILURES
+from app.core.moderation import check_text
 from app.db.session import get_session_factory
 from app.models.chunk import Chunk
 from app.models.document import Document
 from app.pipeline.parser import parse_document
 from app.rag.embeddings import EmbeddingClient
-from app.core.moderation import check_text
 from app.services.settings_service import get_chunking_config
-from app.core.metrics import TASK_FAILURES
 
 logger: structlog.stdlib.BoundLogger = structlog.get_logger(__name__)
 
@@ -62,7 +62,9 @@ async def process_document(doc_id: str | uuid.UUID) -> Document | None:
             questions = [r["question"] for r in records]
             vectors = await embedding_client.embed_texts(questions)
 
-            for index, (record, vector) in enumerate(zip(records, vectors), start=1):
+            for index, (record, vector) in enumerate(
+                zip(records, vectors, strict=True), start=1
+            ):
                 db.add(
                     Chunk(
                         doc_id=doc.id,

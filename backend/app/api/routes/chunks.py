@@ -11,8 +11,7 @@ from app.api.deps import get_db, require_roles
 from app.core.response import PageData, ResponseModel, ok
 from app.models.user import Role, User
 from app.schemas.knowledge import ChunkCreate, ChunkOut, ChunkUpdate
-from app.services import chunk_service, document_service
-from app.services import knowledge_service
+from app.services import chunk_service, document_service, knowledge_service
 
 router = APIRouter(tags=["chunks"])
 
@@ -51,10 +50,12 @@ async def create_chunk(
 @router.get("/chunks/{chunk_id}", response_model=ResponseModel[ChunkOut])
 async def get_chunk(
     chunk_id: uuid.UUID,
-    _: User = Depends(require_roles(Role.ADMIN, Role.AGENT)),
+    user: User = Depends(require_roles(Role.ADMIN, Role.AGENT)),
     db: AsyncSession = Depends(get_db),
 ) -> ResponseModel:
     chunk = await chunk_service.get_chunk(db, chunk_id)
+    # 资源级可见性校验：agent 只能读取自己有权限的知识库下的 Chunk（08 §8 防越权）
+    await knowledge_service.ensure_kb_accessible(db, chunk.kb_id, user)
     return ok(data=ChunkOut.model_validate(chunk))
 
 

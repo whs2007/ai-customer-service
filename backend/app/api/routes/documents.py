@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from pathlib import Path
 
@@ -13,7 +14,7 @@ from app.core.config import get_settings
 from app.core.exceptions import BadRequestError
 from app.core.response import PageData, ResponseModel, ok
 from app.models.user import Role, User
-from app.pipeline.parser import ALLOWED_EXTENSIONS, MAX_FILE_SIZE
+from app.pipeline.parser import get_allowed_extensions, get_max_upload_size
 from app.pipeline.scanner import scan_file, sniff_content
 from app.schemas.knowledge import DocumentOut, UploadDocumentOut
 from app.services import document_service, knowledge_service
@@ -62,14 +63,18 @@ async def upload_document(
     kb = await knowledge_service.get_knowledge_base(db, kb_id)
     file_name = file.filename or ""
     ext = Path(file_name).suffix.lower()
-    if ext not in ALLOWED_EXTENSIONS:
+    allowed_extensions = get_allowed_extensions()
+    if ext not in allowed_extensions:
         raise BadRequestError(
-            f"不支持的文件类型：{ext}（支持：{', '.join(sorted(ALLOWED_EXTENSIONS))}）"
+            f"不支持的文件类型：{ext}（支持：{', '.join(sorted(allowed_extensions))}）"
         )
 
     content = await file.read()
-    if len(content) > MAX_FILE_SIZE:
-        raise BadRequestError("文件大小不能超过 20MB")
+    max_size = get_max_upload_size()
+    if len(content) > max_size:
+        raise BadRequestError(
+            f"文件大小不能超过 {max_size // (1024 * 1024)}MB"
+        )
     if not content:
         raise BadRequestError("文件内容为空")
     # 内容嗅探：拒绝伪装扩展名（08 §8 上传安全）
@@ -77,11 +82,14 @@ async def upload_document(
         raise BadRequestError("文件内容与扩展名不匹配，疑似伪装文件")
 
     settings = get_settings()
-    storage_dir = Path(settings.storage_dir).resolve()
-    target_dir = storage_dir / str(kb.id)
-    target_dir.mkdir(parents=True, exist_ok=True)
+    storage_dir = Path(settings.storage_dir).resolve()  # noqa: ASYNC240 - 纯路径解析，无阻塞 IO
+    target_dir = storage_dir / str(kb.id)  # noqa: ASYNC240 - 纯路径计算，无阻塞 IO
+    await asyncio.to_thread(  # noqa: ASYNC240 - 已移出事件循环，规则无法识别 to_thread
+        target_dir.mkdir, parents=True, exist_ok=True
+    )
     file_path = target_dir / f"{uuid.uuid4().hex}{ext}"
-    file_path.write_bytes(content)
+    # 阻塞 IO 移出事件循环（08 §10：async 路径不做阻塞写）
+    await asyncio.to_thread(file_path.write_bytes, content)
 
     # 恶意文件扫描（可插拔，默认关闭；接入点见 pipeline/scanner.py）
     scan_result = scan_file(file_path, ext.lstrip("."))

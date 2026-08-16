@@ -7,7 +7,8 @@
 from __future__ import annotations
 
 import time
-from datetime import date, datetime, time as dtime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
+from datetime import time as dtime
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
@@ -26,8 +27,8 @@ _cache: dict[str, tuple[float, object]] = {}
 
 def _day_bounds(offset_days: int = 0) -> tuple[datetime, datetime]:
     day = (datetime.now(LOCAL_TZ).date() - timedelta(days=offset_days))
-    start = datetime.combine(day, dtime.min, tzinfo=LOCAL_TZ).astimezone(timezone.utc)
-    end = datetime.combine(day, dtime.max, tzinfo=LOCAL_TZ).astimezone(timezone.utc)
+    start = datetime.combine(day, dtime.min, tzinfo=LOCAL_TZ).astimezone(UTC)
+    end = datetime.combine(day, dtime.max, tzinfo=LOCAL_TZ).astimezone(UTC)
     return start, end
 
 
@@ -103,7 +104,7 @@ async def compute_today_stats(db: AsyncSession) -> dict:
             .where(
                 Message.created_at >= start,
                 Message.created_at <= end,
-                Message.role == "assistant",
+                Message.role.in_(("assistant", "system")),
                 Message.intent.is_not(None),
             )
             .group_by(Message.intent)
@@ -184,7 +185,7 @@ async def get_intents(db: AsyncSession, days: int = 7) -> dict:
             select(Message.intent, func.count(Message.id))
             .where(
                 Message.created_at >= start,
-                Message.role == "assistant",
+                Message.role.in_(("assistant", "system")),
                 Message.intent.is_not(None),
             )
             .group_by(Message.intent)
@@ -195,3 +196,66 @@ async def get_intents(db: AsyncSession, days: int = 7) -> dict:
     _set_cache(key, data)
     return data
 
+
+async def get_ticket_overview(db: AsyncSession) -> dict:
+    """管理端工单看板（13 §3.2 / 开发文档 01 §6.1）：
+    总量 / 待处理 / 处理中 / 今日关闭 / 超时未认领（>30 分钟）。
+    """
+    total = await db.scalar(select(func.count()).select_from(Ticket)) or 0
+    open_count = (
+        await db.scalar(
+            select(func.count())
+            .select_from(Ticket)
+            .where(Ticket.status == "open")
+        )
+        or 0
+    )
+    processing_count = (
+        await db.scalar(
+            select(func.count())
+            .select_from(Ticket)
+            .where(Ticket.status == "processing")
+        )
+        or 0
+    )
+    start, end = _day_bounds()
+    closed_today = (
+        await db.scalar(
+            select(func.count())
+            .select_from(Ticket)
+            .where(
+                Ticket.status == "closed",
+                Ticket.closed_at.is_not(None),
+                Ticket.closed_at >= start,
+                Ticket.closed_at <= end,
+            )
+        )
+        or 0
+    )
+    stale_threshold = datetime.now(UTC) - timedelta(minutes=30)
+    stale_rows = (
+        await db.execute(
+            select(Ticket.ticket_no, Ticket.created_at)
+            .where(
+                Ticket.status == "open",
+                Ticket.created_at < stale_threshold,
+            )
+            .order_by(Ticket.created_at.asc())
+            .limit(50)
+        )
+    ).all()
+    stale_open = [
+        {
+            "ticket_no": no,
+            "created_at": created_at,
+            "minutes": int((datetime.now(UTC) - created_at).total_seconds() // 60),
+        }
+        for no, created_at in stale_rows
+    ]
+    return {
+        "total": total,
+        "open": open_count,
+        "processing": processing_count,
+        "closed_today": closed_today,
+        "stale_open": stale_open,
+    }

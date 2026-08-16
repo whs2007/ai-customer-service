@@ -10,12 +10,12 @@
 
 from __future__ import annotations
 
+import time
 import uuid
 from contextlib import asynccontextmanager
 from typing import Any
 
 import structlog
-import time
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -23,27 +23,33 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.routes import (
-    auth,
     admin,
+    agent,
+    auth,
     chat,
     chunks,
     dashboard,
     documents,
     evaluations,
+    events,
     feedbacks,
     health,
     knowledge_bases,
     retrieval,
     sessions,
-    settings as settings_router,
     tickets,
+    user,
+)
+from app.api.routes import (
+    settings as settings_router,
 )
 from app.core.config import get_settings
 from app.core.exceptions import AppError, InternalError
 from app.core.logging import configure_logging
-from app.core.response import ResponseModel
-from app.core.redis import close_redis, init_redis
 from app.core.metrics import HTTP_DURATION, HTTP_REQUESTS, normalize_path
+from app.core.redis import close_redis, init_redis
+from app.core.response import ResponseModel
+from app.services.event_service import start_event_relay, stop_event_relay
 
 logger: structlog.stdlib.BoundLogger = structlog.get_logger(__name__)
 
@@ -53,10 +59,12 @@ async def lifespan(app: FastAPI):
     """应用生命周期：初始化 Redis 连接（失败仅告警，不阻塞启动）。"""
     settings = get_settings()
     await init_redis(settings)
+    await start_event_relay()
     logger.info("application_started", app=settings.app_name, version=settings.version)
     try:
         yield
     finally:
+        await stop_event_relay()
         await close_redis()
         logger.info("application_stopped", app=settings.app_name)
 
@@ -100,6 +108,9 @@ def create_app() -> FastAPI:
     app.include_router(dashboard.router, prefix=settings.api_prefix)
     app.include_router(sessions.router, prefix=settings.api_prefix)
     app.include_router(admin.router, prefix=settings.api_prefix)
+    app.include_router(user.router, prefix=settings.api_prefix)
+    app.include_router(agent.router, prefix=settings.api_prefix)
+    app.include_router(events.router, prefix=settings.api_prefix)
 
     # 统一异常处理（08 §7 错误码规范）
     register_exception_handlers(app)

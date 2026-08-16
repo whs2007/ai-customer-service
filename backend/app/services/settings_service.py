@@ -5,11 +5,17 @@ from __future__ import annotations
 import copy
 from typing import Any
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.channel_config import ChannelConfig
 from app.models.setting import Setting
-from app.schemas.settings import ChunkingConfig, EscalationConfig, PromptConfig
+from app.schemas.settings import (
+    ChannelConfigOut,
+    ChannelConfigUpdate,
+    ChunkingConfig,
+    EscalationConfig,
+    PromptConfig,
+)
 
 
 async def get_setting(db: AsyncSession, key: str) -> Setting | None:
@@ -19,10 +25,9 @@ async def get_setting(db: AsyncSession, key: str) -> Setting | None:
 async def set_setting(
     db: AsyncSession,
     key: str,
-    value: dict,
+    value: dict | list,
     group: str,
     description: str | None = None,
-    is_secret: bool = False,
 ) -> Setting:
     setting = await db.get(Setting, key)
     if setting is None:
@@ -32,7 +37,6 @@ async def set_setting(
     setting.group = group
     if description is not None:
         setting.description = description
-    setting.is_secret = is_secret
     await db.commit()
     await db.refresh(setting)
     return setting
@@ -117,3 +121,35 @@ async def set_chunking_config(db: AsyncSession, cfg: ChunkingConfig) -> Setting:
         group="chunking",
         description="普通文本分块参数",
     )
+
+
+async def get_channel_config(
+    db: AsyncSession, channel: str = "web_user"
+) -> ChannelConfigOut | None:
+    """读取渠道配置；未配置时返回 None（调用方决定默认值/报错）。"""
+    config = await db.get(ChannelConfig, channel)
+    if config is None:
+        return None
+    return ChannelConfigOut(
+        channel=config.channel,
+        default_kb_ids=[str(x) for x in (config.default_kb_ids or [])],
+        allow_human=config.allow_human,
+        business_hours=config.business_hours,
+        updated_at=config.updated_at,
+    )
+
+
+async def set_channel_config(
+    db: AsyncSession, payload: ChannelConfigUpdate
+) -> ChannelConfig:
+    """写入渠道配置（仅 admin；保存后用户端新会话立即生效）。"""
+    config = await db.get(ChannelConfig, payload.channel)
+    if config is None:
+        config = ChannelConfig(channel=payload.channel)
+        db.add(config)
+    config.default_kb_ids = [str(x) for x in payload.default_kb_ids]
+    config.allow_human = payload.allow_human
+    config.business_hours = payload.business_hours
+    await db.commit()
+    await db.refresh(config)
+    return config

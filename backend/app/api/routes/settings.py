@@ -5,6 +5,7 @@ from __future__ import annotations
 import uuid
 
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db, require_roles
@@ -17,10 +18,22 @@ from app.schemas.chat import (
     ModelProfileTestOut,
     ModelProfileUpdate,
 )
-from app.schemas.settings import ChunkingConfig, EscalationConfig, PromptConfig
+from app.schemas.settings import (
+    ChannelConfigOut,
+    ChannelConfigUpdate,
+    ChunkingConfig,
+    EscalationConfig,
+    PromptConfig,
+)
 from app.services import model_profile_service, settings_service
 
 router = APIRouter(prefix="/settings", tags=["settings"])
+
+
+class SensitiveWordsUpdate(BaseModel):
+    """内容审核敏感词配置（08 §8：管理员在线维护）。"""
+
+    words: list[str] = Field(default_factory=list, max_length=200)
 
 
 @router.get("/intent", response_model=ResponseModel)
@@ -198,3 +211,59 @@ async def update_chunking_config(
 ) -> ResponseModel:
     await settings_service.set_chunking_config(db, payload)
     return ok(data=payload, message="分块参数已更新")
+
+
+@router.get("/moderation/words", response_model=ResponseModel)
+async def get_moderation_words(
+    _: User = Depends(require_roles(Role.ADMIN)),
+    db: AsyncSession = Depends(get_db),
+) -> ResponseModel:
+    """读取内容审核敏感词（本地兜底词表）。"""
+    from app.core.moderation import get_sensitive_words
+
+    return ok(data={"words": await get_sensitive_words(db)})
+
+
+@router.put("/moderation/words", response_model=ResponseModel)
+async def update_moderation_words(
+    payload: SensitiveWordsUpdate,
+    _: User = Depends(require_roles(Role.ADMIN)),
+    db: AsyncSession = Depends(get_db),
+) -> ResponseModel:
+    """覆盖内容审核敏感词（管理员在线维护，≤200 条）。"""
+    from app.core.moderation import set_sensitive_words
+
+    await set_sensitive_words(db, payload.words)
+    return ok(message="敏感词已更新")
+
+
+@router.get("/channel", response_model=ResponseModel[ChannelConfigOut])
+async def get_channel_config(
+    _: User = Depends(require_roles(Role.ADMIN)),
+    db: AsyncSession = Depends(get_db),
+) -> ResponseModel:
+    """读取渠道配置（11 §8 / 开发文档 01 §6.2）。"""
+    config = await settings_service.get_channel_config(db)
+    if config is None:
+        config = ChannelConfigOut(channel="web_user", default_kb_ids=[])
+    return ok(data=config)
+
+
+@router.put("/channel", response_model=ResponseModel[ChannelConfigOut])
+async def update_channel_config(
+    payload: ChannelConfigUpdate,
+    _: User = Depends(require_roles(Role.ADMIN)),
+    db: AsyncSession = Depends(get_db),
+) -> ResponseModel:
+    """保存渠道配置（admin；用户端新会话立即生效）。"""
+    config = await settings_service.set_channel_config(db, payload)
+    return ok(
+        data=ChannelConfigOut(
+            channel=config.channel,
+            default_kb_ids=[str(x) for x in (config.default_kb_ids or [])],
+            allow_human=config.allow_human,
+            business_hours=config.business_hours,
+            updated_at=config.updated_at,
+        ),
+        message="渠道配置已保存",
+    )

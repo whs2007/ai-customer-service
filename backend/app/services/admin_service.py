@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -64,8 +65,8 @@ async def export_knowledge_bases(db: AsyncSession) -> dict:
             select(KnowledgeBase).where(KnowledgeBase.deleted_at.is_(None))
         )
     ).scalars().all()
-    payload = {
-        "exported_at": datetime.now(timezone.utc).isoformat(),
+    payload: dict[str, Any] = {
+        "exported_at": datetime.now(UTC).isoformat(),
         "knowledge_bases": [],
     }
     for kb in kbs:
@@ -76,7 +77,7 @@ async def export_knowledge_bases(db: AsyncSession) -> dict:
                 )
             )
         ).scalars().all()
-        kb_item = {
+        kb_item: dict[str, Any] = {
             "id": str(kb.id),
             "name": kb.name,
             "description": kb.description,
@@ -113,4 +114,3 @@ async def export_knowledge_bases(db: AsyncSession) -> dict:
             )
         payload["knowledge_bases"].append(kb_item)
     return payload
-

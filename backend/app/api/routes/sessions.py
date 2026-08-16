@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime, time, timezone
+from datetime import UTC, date, datetime, time
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Query
@@ -11,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db, require_roles
+from app.core.exceptions import ForbiddenError
 from app.core.response import PageData, ResponseModel, ok
 from app.models.session_annotation import SessionAnnotation
 from app.models.ticket import Ticket
@@ -38,7 +39,7 @@ def _parse_date(value: date, end_of_day: bool = False) -> datetime:
     local = datetime.combine(
         value, time.max if end_of_day else time.min, tzinfo=ZoneInfo("Asia/Shanghai")
     )
-    return local.astimezone(timezone.utc)
+    return local.astimezone(UTC)
 
 
 @router.get("/sessions", response_model=ResponseModel[PageData[SessionListItemOut]])
@@ -52,7 +53,7 @@ async def list_sessions(
     annotated: bool | None = Query(default=None, description="标注状态"),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=10, ge=1, le=100),
-    _: User = Depends(require_roles(Role.ADMIN, Role.AGENT, Role.VIEWER)),
+    _: User = Depends(require_roles(Role.ADMIN, Role.AGENT)),
     db: AsyncSession = Depends(get_db),
 ) -> ResponseModel:
     items, total = await session_service.list_sessions(
@@ -80,7 +81,7 @@ async def list_sessions(
 @router.get("/sessions/{session_id}", response_model=ResponseModel[SessionDetailOut])
 async def get_session(
     session_id: uuid.UUID,
-    _: User = Depends(require_roles(Role.ADMIN, Role.AGENT, Role.VIEWER)),
+    _: User = Depends(require_roles(Role.ADMIN, Role.AGENT)),
     db: AsyncSession = Depends(get_db),
 ) -> ResponseModel:
     """会话详情：消息（含引用明细）+ 链路 trace + 关联工单 + 标注。"""
@@ -158,6 +159,8 @@ async def annotate_session(
     user: User = Depends(require_roles(Role.ADMIN, Role.AGENT)),
     db: AsyncSession = Depends(get_db),
 ) -> ResponseModel:
+    # 职责分离（方案 C）：指定评测集仅 admin；客服标注只产生候选，由管理员确认入集
+    if user.role != "admin" and payload.eval_set_id is not None:
+        raise ForbiddenError("仅管理员可指定评测集，客服标注将进入候选待确认")
     annotation = await annotation_service.upsert_annotation(db, session_id, payload, user)
     return ok(data=AnnotationOut.model_validate(annotation), message="标注已保存")
-

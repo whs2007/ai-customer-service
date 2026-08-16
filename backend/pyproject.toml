@@ -45,3 +45,27 @@ asyncio_mode = "auto"
 testpaths = ["tests"]
 asyncio_default_fixture_loop_scope = "session"
 asyncio_default_test_loop_scope = "session"
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+src = ["app", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "ASYNC"]
+ignore = [
+    "B008",  # FastAPI Depends() 默认参数为惯用法
+    "UP042",  # str + Enum 是本项目存储枚举的惯用写法
+    "ASYNC109",  # timeout 为字面参数名，非 trio/anyio 语义
+]
+
+[tool.ruff.lint.per-file-ignores]
+# 评测种子数据为长中文文本，行宽规则不适用
+"app/services/eval_seed.py" = ["E501"]
+
+[tool.mypy]
+python_version = "3.11"
+plugins = ["pydantic.mypy"]
+files = ["app"]
+warn_unused_configs = true
+ignore_missing_imports = true  # celery/openpyxl/docx/pypdf 等无 stubs 的依赖

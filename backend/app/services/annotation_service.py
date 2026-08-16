@@ -7,7 +7,6 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import NotFoundError
 from app.models.eval_candidate import EvalCandidate
 from app.models.message import Message
 from app.models.session_annotation import SessionAnnotation

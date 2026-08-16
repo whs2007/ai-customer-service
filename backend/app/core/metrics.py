@@ -32,6 +32,11 @@ RETRIEVAL_DURATION = Histogram("retrieval_duration_seconds", "检索耗时")
 QUEUE_LAG = Gauge("queue_lag", "Celery 队列积压量（inline 模式为 0）")
 TASK_FAILURES = Counter("task_failures_total", "后台任务失败数", ["kind"])
 
+# SSE 实时连接（P1-4：连接数与累计连接数，支撑容量监控）
+# 注：Counter 的 _total 后缀与同名 Gauge 在 prometheus-client 新版本同属一族，须避免同名
+SSE_CONNECTIONS = Gauge("sse_connections_active", "SSE 当前连接数")
+SSE_CONNECTIONS_TOTAL = Counter("sse_connections_total", "SSE 累计连接数")
+
 
 def normalize_path(path: str) -> str:
     """路径归一化：UUID 段替换为 :id，避免指标基数爆炸。"""
@@ -40,4 +45,3 @@ def normalize_path(path: str) -> str:
 
 def render_metrics() -> tuple[bytes, str]:
     return generate_latest(), CONTENT_TYPE_LATEST
-

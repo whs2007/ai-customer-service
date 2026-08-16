@@ -26,7 +26,12 @@ import {
   type AdminUser,
 } from '../../api/users';
 
-const ROLE_LABELS: Record<string, string> = { admin: '管理员', agent: '客服', viewer: '只读访客' };
+const ROLE_LABELS: Record<string, string> = {
+  admin: '管理员',
+  agent: '客服',
+  viewer: '只读访客',
+  user: '用户',
+};
 
 export default function AccessTab() {
   const queryClient = useQueryClient();
@@ -282,6 +287,7 @@ export default function AccessTab() {
                       { value: 'admin', label: '管理员' },
                       { value: 'agent', label: '客服' },
                       { value: 'viewer', label: '只读访客' },
+                      { value: 'user', label: '用户' },
                     ]}
                   />
                 </Form.Item>

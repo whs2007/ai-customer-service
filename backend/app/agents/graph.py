@@ -8,7 +8,6 @@ from app.agents.nodes import (
     classify_intent,
     collect_form,
     escalate,
-    fallback,
     generate,
     lookup_order,
     retrieve,
@@ -25,12 +24,8 @@ def route_by_intent(state: ChatState) -> str:
         return "retrieve"
     if intent in ("complaint", "transfer"):
         return "escalate"
-    return "fallback"
-
-
-def after_fallback(state: ChatState) -> str:
-    threshold = state.get("escalation_threshold", 2)
-    return "escalate" if state.get("escalation_count", 0) >= threshold else END
+    # policy_query 及其它问题一律先检索，检索不到再由 route_after_retrieval 走兜底
+    return "retrieve"
 
 
 def build_chat_graph():
@@ -41,16 +36,15 @@ def build_chat_graph():
     graph.add_node("retrieve", retrieve)
     graph.add_node("generate", generate)
     graph.add_node("escalate", escalate)
-    graph.add_node("fallback", fallback)
 
     graph.add_edge(START, "classify_intent")
     graph.add_conditional_edges("classify_intent", route_by_intent)
     graph.add_edge("lookup_order", "generate")
+    # 检索后一律进入生成：有命中用知识库上下文，无命中由 LLM 自然回复
     graph.add_edge("retrieve", "generate")
     graph.add_edge("generate", END)
     graph.add_edge("collect_form", END)
     graph.add_edge("escalate", END)
-    graph.add_conditional_edges("fallback", after_fallback, {END: END, "escalate": "escalate"})
     return graph.compile()
 
 

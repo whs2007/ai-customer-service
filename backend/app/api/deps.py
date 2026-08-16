@@ -6,6 +6,7 @@ from fastapi import Depends, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.exceptions import ForbiddenError, UnauthorizedError
 from app.core.security import TOKEN_TYPE_ACCESS, decode_token
 from app.db.session import get_db
@@ -33,6 +34,8 @@ async def get_current_user(
     user = result.scalar_one_or_none()
     if user is None or user.status != UserStatus.ACTIVE.value:
         raise UnauthorizedError("账号不可用，请重新登录")
+    if payload.get("ver") != user.token_version:
+        raise UnauthorizedError("登录状态已失效，请重新登录")
     return user
 
 
@@ -46,3 +49,16 @@ def require_roles(*roles: Role):
 
     return _checker
 
+
+def require_ticket_operator():
+    """工单写操作权限（职责分离）：agent 可操作；admin 默认只读，
+    仅当 allow_admin_ticket_ops=true 时允许（需求决策：管理端不伸手一线客服工作）。"""
+
+    async def _checker(user: User = Depends(get_current_user)) -> User:
+        if user.role == "agent":
+            return user
+        if user.role == "admin" and get_settings().allow_admin_ticket_ops:
+            return user
+        raise ForbiddenError("工单处理仅客服可操作，管理员默认只读")
+
+    return _checker

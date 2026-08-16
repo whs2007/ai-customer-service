@@ -41,7 +41,17 @@ async def create_set(
     db: AsyncSession = Depends(get_db),
 ) -> ResponseModel:
     es = await eval_service.create_eval_set(db, payload, user)
-    return ok(data=EvalSetOut(id=es.id, name=es.name, description=es.description, source=es.source, created_at=es.created_at, updated_at=es.updated_at), message="创建成功")
+    return ok(
+        data=EvalSetOut(
+            id=es.id,
+            name=es.name,
+            description=es.description,
+            source=es.source,
+            created_at=es.created_at,
+            updated_at=es.updated_at,
+        ),
+        message="创建成功",
+    )
 
 
 @router.put("/sets/{set_id}", response_model=ResponseModel[EvalSetOut])
@@ -52,7 +62,17 @@ async def update_set(
     db: AsyncSession = Depends(get_db),
 ) -> ResponseModel:
     es = await eval_service.update_eval_set(db, set_id, payload)
-    return ok(data=EvalSetOut(id=es.id, name=es.name, description=es.description, source=es.source, created_at=es.created_at, updated_at=es.updated_at), message="更新成功")
+    return ok(
+        data=EvalSetOut(
+            id=es.id,
+            name=es.name,
+            description=es.description,
+            source=es.source,
+            created_at=es.created_at,
+            updated_at=es.updated_at,
+        ),
+        message="更新成功",
+    )
 
 
 @router.delete("/sets/{set_id}", response_model=ResponseModel)
@@ -218,4 +238,3 @@ async def reject_candidate(
 ) -> ResponseModel:
     await eval_service.reject_candidate(db, candidate_id)
     return ok(message="候选已拒绝")
-

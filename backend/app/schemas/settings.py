@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from datetime import datetime
+from typing import Any
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from app.pipeline.chunker import DEFAULT_CHUNK_SIZE, DEFAULT_OVERLAP
 
 
 class PromptConfig(BaseModel):
@@ -38,6 +43,27 @@ class EscalationConfig(BaseModel):
 class ChunkingConfig(BaseModel):
     """数据管理（07 §2：普通文本分块参数，04 §3.5）。"""
 
-    chunk_size: int = Field(default=500, ge=100, le=2000)
-    overlap: int = Field(default=50, ge=0, le=200)
+    # 单一默认值来源：与 pipeline.chunker 保持一致，避免两处漂移
+    chunk_size: int = Field(default=DEFAULT_CHUNK_SIZE, ge=100, le=2000)
+    overlap: int = Field(default=DEFAULT_OVERLAP, ge=0, le=200)
 
+
+class ChannelConfigOut(BaseModel):
+    """渠道配置（11 §8 / 开发文档 01 §6.2）：用户端默认知识库等。"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    channel: str
+    default_kb_ids: list[str] = Field(default_factory=list)
+    allow_human: bool = True
+    business_hours: dict[str, Any] | None = None
+    updated_at: datetime | None = None
+
+
+class ChannelConfigUpdate(BaseModel):
+    """渠道配置更新请求。"""
+
+    channel: str = Field(pattern="^[a-zA-Z0-9_]{1,50}$", description="渠道标识")
+    default_kb_ids: list[str] = Field(default_factory=list, max_length=20)
+    allow_human: bool = True
+    business_hours: dict[str, Any] | None = None

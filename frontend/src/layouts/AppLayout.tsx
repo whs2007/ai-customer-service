@@ -26,6 +26,7 @@ const { Sider, Header, Content } = Layout;
 
 const MENU_ITEMS = [
   { key: '/dashboard', icon: <DashboardIcon />, label: '工作台' },
+  { key: '/tickets-overview', icon: <ProfileOutlined />, label: '工单看板' },
   { key: '/chat', icon: <MessageOutlined />, label: '智能客服' },
   { key: '/knowledge', icon: <DatabaseOutlined />, label: '知识库' },
   { key: '/recall-test', icon: <SearchOutlined />, label: '检索测试' },
@@ -50,7 +51,7 @@ export default function AppLayout() {
   const visibleItems = MENU_ITEMS.filter((item) => {
     if (user?.role === 'admin') return true;
     if (user?.role === 'agent') {
-      return !['/evaluation', '/settings'].includes(item.key);
+      return !['/evaluation', '/settings', '/tickets-overview'].includes(item.key);
     }
     return ['/dashboard', '/help'].includes(item.key);
   });

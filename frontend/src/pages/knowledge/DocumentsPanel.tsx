@@ -29,7 +29,7 @@ import {
   type UploadProps,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
 import { ApiError } from '../../api/client';
@@ -41,6 +41,7 @@ import {
   uploadDocument,
   type DocumentItem,
 } from '../../api/knowledge';
+import { useAuthStore } from '../../stores/auth';
 
 const PROCESSING_STATUSES = ['uploading', 'parsing', 'embedding'];
 const ALLOWED_EXTENSIONS = ['.xlsx', '.csv', '.md', '.txt', '.pdf', '.docx'];
@@ -71,6 +72,8 @@ function formatSize(bytes: number): string {
 export default function DocumentsPanel() {
   const { kbId = '' } = useParams();
   const navigate = useNavigate();
+  // 职责分离（方案 B）：agent 只读知识库文档
+  const readonly = useAuthStore((s) => s.user)?.role === 'agent';
   const queryClient = useQueryClient();
   const [keyword, setKeyword] = useState('');
   const [debouncedKeyword, setDebouncedKeyword] = useState('');
@@ -129,16 +132,19 @@ export default function DocumentsPanel() {
     onError: (err) => message.error(err instanceof ApiError ? err.message : '操作失败'),
   });
 
-  const confirmDelete = (doc: DocumentItem) => {
-    Modal.confirm({
-      title: '删除文档',
-      content: `将删除「${doc.file_name}」及其全部 Chunk 与向量，且不可恢复。确定删除吗？`,
-      okText: '删除',
-      okButtonProps: { danger: true },
-      cancelText: '取消',
-      onOk: () => deleteMutation.mutateAsync(doc.id),
-    });
-  };
+  const confirmDelete = useCallback(
+    (doc: DocumentItem) => {
+      Modal.confirm({
+        title: '删除文档',
+        content: `将删除「${doc.file_name}」及其全部 Chunk 与向量，且不可恢复。确定删除吗？`,
+        okText: '删除',
+        okButtonProps: { danger: true },
+        cancelText: '取消',
+        onOk: () => deleteMutation.mutateAsync(doc.id),
+      });
+    },
+    [deleteMutation],
+  );
 
   const columns: ColumnsType<DocumentItem> = useMemo(
     () => [
@@ -207,7 +213,7 @@ export default function DocumentsPanel() {
             >
               查看详情
             </Button>
-            {doc.status === 'failed' && (
+            {!readonly && doc.status === 'failed' && (
               <Button
                 type="link"
                 size="small"
@@ -217,20 +223,22 @@ export default function DocumentsPanel() {
                 重新解析
               </Button>
             )}
-            <Button
-              type="link"
-              size="small"
-              danger
-              icon={<DeleteOutlined />}
-              onClick={() => confirmDelete(doc)}
-            >
-              删除
-            </Button>
+            {!readonly && (
+              <Button
+                type="link"
+                size="small"
+                danger
+                icon={<DeleteOutlined />}
+                onClick={() => confirmDelete(doc)}
+              >
+                删除
+              </Button>
+            )}
           </Space>
         ),
       },
     ],
-    [kbId, navigate, reparseMutation],
+    [kbId, navigate, reparseMutation, confirmDelete, readonly],
   );
 
   const customRequest: UploadProps['customRequest'] = async (options) => {
@@ -290,27 +298,29 @@ export default function DocumentsPanel() {
             setPage(1);
           }}
         />
-        <Upload
-          accept={ALLOWED_EXTENSIONS.join(',')}
-          showUploadList={false}
-          customRequest={customRequest}
-          beforeUpload={(file) => {
-            const ext = file.name.slice(file.name.lastIndexOf('.')).toLowerCase();
-            if (!ALLOWED_EXTENSIONS.includes(ext)) {
-              message.error(`不支持的文件类型（支持：${ALLOWED_EXTENSIONS.join(' / ')}）`);
-              return Upload.LIST_IGNORE;
-            }
-            if (file.size > MAX_SIZE) {
-              message.error('文件大小不能超过 20MB');
-              return Upload.LIST_IGNORE;
-            }
-            return true;
-          }}
-        >
-          <Button type="primary" icon={<CloudUploadOutlined />}>
-            上传文件
-          </Button>
-        </Upload>
+        {!readonly && (
+          <Upload
+            accept={ALLOWED_EXTENSIONS.join(',')}
+            showUploadList={false}
+            customRequest={customRequest}
+            beforeUpload={(file) => {
+              const ext = file.name.slice(file.name.lastIndexOf('.')).toLowerCase();
+              if (!ALLOWED_EXTENSIONS.includes(ext)) {
+                message.error(`不支持的文件类型（支持：${ALLOWED_EXTENSIONS.join(' / ')}）`);
+                return Upload.LIST_IGNORE;
+              }
+              if (file.size > MAX_SIZE) {
+                message.error('文件大小不能超过 20MB');
+                return Upload.LIST_IGNORE;
+              }
+              return true;
+            }}
+          >
+            <Button type="primary" icon={<CloudUploadOutlined />}>
+              上传文件
+            </Button>
+          </Upload>
+        )}
       </div>
 
       {/* 表格区 */}

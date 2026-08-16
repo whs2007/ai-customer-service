@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-import uuid
-
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import BadRequestError, NotFoundError
-from app.models.message import Message
 from app.models.eval_candidate import EvalCandidate
+from app.models.message import Message
 from app.models.message_feedback import MessageFeedback
 from app.models.user import User
 from app.schemas.chat import FeedbackCreate

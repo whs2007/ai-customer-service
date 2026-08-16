@@ -198,6 +198,7 @@ export default function ChatPage() {
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
+  const [transferred, setTransferred] = useState(false);
   const [initializing, setInitializing] = useState(true);
   const [addCitationOpen, setAddCitationOpen] = useState(false);
   const [candidates, setCandidates] = useState<Citation[]>([]);
@@ -263,6 +264,7 @@ export default function ChatPage() {
       setCitations(lastCited?.citations ?? []);
       setCitationMessageId(lastCited?.id ?? null);
       setStreaming(false);
+      setTransferred(detail.session.status === 'transferred');
     } catch (err) {
       message.error(err instanceof ApiError ? err.message : '会话加载失败');
     }
@@ -275,6 +277,7 @@ export default function ChatPage() {
     setCitations([]);
     setCitationMessageId(null);
     setStreaming(false);
+    setTransferred(false);
   };
 
   // 自动滚动：仅当用户停留在底部时跟随
@@ -305,7 +308,6 @@ export default function ChatPage() {
       message.warning('请先选择至少一个知识库');
       return;
     }
-
     setMessages((msgs) => [
       ...msgs,
       { id: `local-${Date.now()}`, role: 'user', content },
@@ -361,6 +363,7 @@ export default function ChatPage() {
               )
             : msgs.filter((m) => m.id !== 'streaming');
           if (ev.data.ticket_no) {
+            setTransferred(true);
             return [
               ...base,
               {
@@ -645,8 +648,13 @@ export default function ChatPage() {
           )}
         </div>
 
-        {/* 输入区（03 §4.3） */}
+        {/* 输入区（03 §4.3）：转人工后仍可留言，仅保存供人工客服查看 */}
         <div style={{ borderTop: '1px solid #F3F4F6', padding: '12px 16px', background: '#FFFFFF' }}>
+          {transferred && (
+            <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
+              该会话已转人工客服，您仍可继续留言，消息将保存供人工客服查看，AI 不再自动回复
+            </Typography.Text>
+          )}
           <Input.TextArea
             value={input}
             placeholder="请输入您的问题…（Enter 发送，Shift+Enter 换行）"

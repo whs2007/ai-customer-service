@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_db, require_roles
 from app.core.response import PageData, ResponseModel, ok
 from app.models.user import Role, User
-from app.services import admin_service
+from app.services import admin_service, dashboard_service
 
 router = APIRouter(tags=["admin"])
 
@@ -64,3 +64,11 @@ async def export_knowledge_bases(
         },
     )
 
+
+@router.get("/admin/tickets/overview", response_model=ResponseModel)
+async def tickets_overview(
+    _: User = Depends(require_roles(Role.ADMIN)),
+    db: AsyncSession = Depends(get_db),
+) -> ResponseModel:
+    """管理端工单看板（13 §3.2 / 开发文档 01 §6.1）。"""
+    return ok(data=await dashboard_service.get_ticket_overview(db))

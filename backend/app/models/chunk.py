@@ -13,8 +13,8 @@ from sqlalchemy import Computed, DateTime, ForeignKey, Integer, String, Text, fu
 from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db.base import Base
 from app.core.config import get_settings
+from app.db.base import Base
 
 
 class Chunk(Base):

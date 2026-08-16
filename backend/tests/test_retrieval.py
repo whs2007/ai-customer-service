@@ -73,6 +73,16 @@ class UnavailableRerank(FakeRerank):
     available = False
 
 
+class FailingRerank(FakeRerank):
+    """重排服务故障：available=True 但调用抛异常（验证降级为混合检索）。"""
+
+    available = True
+    model_name = "fake-failing"
+
+    async def rerank(self, query, documents, top_n=None):
+        raise RuntimeError("rerank upstream down")
+
+
 @pytest.mark.asyncio
 async def test_vector_mode(client: AsyncClient, admin_headers):
     kb = await _make_kb_with_sample(client, admin_headers, f"B3V_{uuid.uuid4().hex[:8]}")
@@ -137,6 +147,25 @@ async def test_rerank_fallback_without_key(
     )
     assert data["actual_mode"] == "hybrid"
     assert data["rerank_skipped"] is True
+    assert all(h["rerank_score"] is None for h in data["hits"])
+
+
+@pytest.mark.asyncio
+async def test_rerank_failure_degrades_to_hybrid(
+    client: AsyncClient, admin_headers, monkeypatch
+):
+    """重排已配置但调用失败 → 降级为混合检索，不能导致整次检索失败。"""
+    monkeypatch.setattr("app.rag.retriever.RerankClient", FailingRerank)
+    kb = await _make_kb_with_sample(
+        client, admin_headers, f"B3FD_{uuid.uuid4().hex[:8]}"
+    )
+    data = await _search(
+        client, admin_headers, [kb["id"]], "商品签收后几天可以退货？",
+        retriever_mode="hybrid_rerank",
+    )
+    assert data["actual_mode"] == "hybrid"
+    assert data["rerank_skipped"] is True
+    assert data["hits"]
     assert all(h["rerank_score"] is None for h in data["hits"])
 
 

@@ -6,7 +6,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, String, func
+from sqlalchemy import CheckConstraint, DateTime, Integer, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -14,11 +14,12 @@ from app.db.base import Base
 
 
 class Role(str, enum.Enum):
-    """角色（00 §3 / 08 §4.1）。"""
+    """角色（00 §3 / 08 §4.1；11 §3.1 新增 user）。"""
 
     ADMIN = "admin"
     AGENT = "agent"
     VIEWER = "viewer"
+    USER = "user"
 
 
 class UserStatus(str, enum.Enum):
@@ -31,7 +32,9 @@ class UserStatus(str, enum.Enum):
 class User(Base):
     __tablename__ = "users"
     __table_args__ = (
-        CheckConstraint("role IN ('admin','agent','viewer')", name="ck_users_role"),
+        CheckConstraint(
+            "role IN ('admin','agent','viewer','user')", name="ck_users_role"
+        ),
         CheckConstraint("status IN ('active','disabled')", name="ck_users_status"),
     )
 
@@ -52,6 +55,17 @@ class User(Base):
     last_login_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # 会话版本号：改密/停用/角色变更时 +1，使已签发 JWT 全部失效（08 §8 会话吊销）
+    token_version: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    # 登录失败风控（11 §3.3）：连续 5 次失败锁 15 分钟
+    failed_login_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    locked_until: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -61,4 +75,3 @@ class User(Base):
         onupdate=func.now(),
         nullable=False,
     )
-

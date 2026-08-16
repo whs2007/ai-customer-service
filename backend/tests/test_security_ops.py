@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import base64
-import hashlib
 import json
 import time
 import uuid
@@ -70,7 +69,6 @@ async def test_upload_mime_sniff(client: AsyncClient, admin_headers):
 async def test_secret_fernet_and_legacy_migration(
     client: AsyncClient, admin_headers, db_session
 ):
-    from app.core.config import get_settings
     from app.core.security import (
         _legacy_xor_key,
         decrypt_secret,
@@ -130,7 +128,7 @@ async def test_moderation_document_blocked(
     resp = await client.post(
         f"/api/knowledge-bases/{kb['id']}/documents",
         headers=admin_headers,
-        files={"file": ("违规内容.txt", "这里包含赌博推广内容".encode("utf-8"), "text/plain")},
+        files={"file": ("违规内容.txt", "这里包含赌博推广内容".encode(), "text/plain")},
     )
     doc = await _wait_document(client, admin_headers, resp.json()["data"]["document_id"])
     assert doc["status"] == "failed"
@@ -223,7 +221,7 @@ async def test_ticket_cited_from_history(client: AsyncClient, admin_headers):
         headers=admin_headers,
         json={"kb_ids": [kb["id"]], "message": "商品签收后几天可以退货？"},
     ) as resp:
-        for line in [l.strip() async for l in resp.aiter_lines()]:
+        for line in [raw.strip() async for raw in resp.aiter_lines()]:
             if line.startswith("data:") and "intent" in line:
                 first = json.loads(line[5:].strip())
     assert first["intent"] == "policy_query"
@@ -239,7 +237,7 @@ async def test_ticket_cited_from_history(client: AsyncClient, admin_headers):
             "message": "我要投诉！",
         },
     ) as resp:
-        for line in [l.strip() async for l in resp.aiter_lines()]:
+        for line in [raw.strip() async for raw in resp.aiter_lines()]:
             if line.startswith("data:") and "ticket_no" in line:
                 second = json.loads(line[5:].strip())
     assert second["ticket_no"]
@@ -322,3 +320,83 @@ async def test_kb_detail_visibility_enforced(
         json=vis_body,
     )
     assert (await client.get(f"/api/knowledge-bases/{kb['id']}", headers=headers_a)).status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_chunk_detail_visibility_enforced(
+    client: AsyncClient, admin_headers
+):
+    """P1-3：GET /chunks/{id} 同样按知识库可见性校验（agent 越权 403）。"""
+    suffix = uuid.uuid4().hex[:6]
+    ua = (
+        await client.post(
+            "/api/auth/users",
+            headers=admin_headers,
+            json={
+                "username": f"vc_a_{suffix}",
+                "password": "pass123456",
+                "display_name": "A",
+                "role": "agent",
+            },
+        )
+    ).json()["data"]
+    headers_a = {
+        "Authorization": "Bearer "
+        + (
+            await client.post(
+                "/api/auth/login",
+                json={"username": f"vc_a_{suffix}", "password": "pass123456"},
+            )
+        ).json()["data"]["access_token"]
+    }
+
+    kb = (
+        await client.post(
+            "/api/knowledge-bases",
+            headers=admin_headers,
+            json={"name": f"VC_{suffix}", "description": ""},
+        )
+    ).json()["data"]
+    with SAMPLE_XLSX.open("rb") as f:
+        up = await client.post(
+            f"/api/knowledge-bases/{kb['id']}/documents",
+            headers=admin_headers,
+            files={"file": ("FAQ知识库导入模板.xlsx", f, "application/octet-stream")},
+        )
+    doc = await _wait_document(client, admin_headers, up.json()["data"]["document_id"])
+
+    chunks = (
+        await client.get(
+            f"/api/documents/{doc['id']}/chunks?page_size=1",
+            headers=admin_headers,
+        )
+    ).json()["data"]["items"]
+    assert chunks
+    chunk_id = chunks[0]["id"]
+
+    # 可见性设为 user（仅 admin）→ agent 读取 Chunk 详情必须 403
+    vis_body = {
+        "name": kb["name"],
+        "description": "",
+        "visibility": "user",
+        "visible_user_ids": [],
+    }
+    await client.put(
+        f"/api/knowledge-bases/{kb['id']}",
+        headers=admin_headers,
+        json=vis_body,
+    )
+    assert (
+        await client.get(f"/api/chunks/{chunk_id}", headers=headers_a)
+    ).status_code == 403
+
+    # 加入可见用户后放行
+    vis_body["visible_user_ids"] = [str(ua["id"])]
+    await client.put(
+        f"/api/knowledge-bases/{kb['id']}",
+        headers=admin_headers,
+        json=vis_body,
+    )
+    ok = await client.get(f"/api/chunks/{chunk_id}", headers=headers_a)
+    assert ok.status_code == 200
+    assert ok.json()["data"]["id"] == chunk_id

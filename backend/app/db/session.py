@@ -26,6 +26,15 @@ def get_engine() -> AsyncEngine:
             settings.database_url,
             echo=settings.debug,
             pool_pre_ping=True,
+            pool_size=settings.db_pool_size,
+            max_overflow=settings.db_max_overflow,
+            pool_timeout=settings.db_pool_timeout,
+            connect_args={
+                "timeout": settings.db_connect_timeout,
+                "server_settings": {
+                    "statement_timeout": str(settings.db_statement_timeout_ms),
+                },
+            },
         )
         _session_factory = async_sessionmaker(
             _engine, expire_on_commit=False, class_=AsyncSession

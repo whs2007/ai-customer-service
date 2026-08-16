@@ -23,6 +23,8 @@ import {
 import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
+import { useAuthStore } from '../../stores/auth';
+
 import { ApiError } from '../../api/client';
 import {
   createChunk,
@@ -47,6 +49,8 @@ interface ChunkFormValues {
 export default function ChunkDetailPage() {
   const { kbId = '', docId = '' } = useParams();
   const queryClient = useQueryClient();
+  // 职责分离（方案 B）：agent 只读 Chunk
+  const readonly = useAuthStore((s) => s.user)?.role === 'agent';
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [modalOpen, setModalOpen] = useState(false);
@@ -138,12 +142,14 @@ export default function ChunkDetailPage() {
           </Space>
         }
         extra={
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => {
-            setEditing(null);
-            setModalOpen(true);
-          }}>
-            添加 Chunk
-          </Button>
+          !readonly ? (
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => {
+              setEditing(null);
+              setModalOpen(true);
+            }}>
+              添加 Chunk
+            </Button>
+          ) : undefined
         }
       >
         {isLoading ? (
@@ -186,28 +192,30 @@ export default function ChunkDetailPage() {
                       ))}
                     </div>
                   </div>
-                  <Space>
-                    <Button
-                      type="link"
-                      size="small"
-                      icon={<EditOutlined />}
-                      onClick={() => {
-                        setEditing(chunk);
-                        setModalOpen(true);
-                      }}
-                    >
-                      编辑
-                    </Button>
-                    <Button
-                      type="link"
-                      size="small"
-                      danger
-                      icon={<DeleteOutlined />}
-                      onClick={() => confirmDelete(chunk)}
-                    >
-                      删除
-                    </Button>
-                  </Space>
+                  {!readonly && (
+                    <Space>
+                      <Button
+                        type="link"
+                        size="small"
+                        icon={<EditOutlined />}
+                        onClick={() => {
+                          setEditing(chunk);
+                          setModalOpen(true);
+                        }}
+                      >
+                        编辑
+                      </Button>
+                      <Button
+                        type="link"
+                        size="small"
+                        danger
+                        icon={<DeleteOutlined />}
+                        onClick={() => confirmDelete(chunk)}
+                      >
+                        删除
+                      </Button>
+                    </Space>
+                  )}
                 </div>
               </Card>
             ))}
@@ -241,4 +249,3 @@ export default function ChunkDetailPage() {
     </div>
   );
 }
-

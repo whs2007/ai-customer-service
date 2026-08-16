@@ -8,8 +8,10 @@ import { ApiError } from '../../api/client';
 import {
   getEscalationConfig,
   getIntentRules,
+  getModerationWords,
   updateEscalationConfig,
   updateIntentRules,
+  updateModerationWords,
 } from '../../api/settings';
 import { INTENT_LABELS } from '../../api/sessions';
 
@@ -19,14 +21,17 @@ export default function RulesTab() {
   const queryClient = useQueryClient();
   const [intentForm] = Form.useForm();
   const [escForm] = Form.useForm();
+  const [modForm] = Form.useForm();
 
   const { data: intentRules } = useQuery({ queryKey: ['intent-rules'], queryFn: getIntentRules });
   const { data: escConfig } = useQuery({ queryKey: ['escalation-config'], queryFn: getEscalationConfig });
+  const { data: modWords } = useQuery({ queryKey: ['moderation-words'], queryFn: getModerationWords });
 
   useEffect(() => {
     if (intentRules) intentForm.setFieldsValue({ keywords: intentRules.keywords });
     if (escConfig) escForm.setFieldsValue(escConfig);
-  }, [intentRules, escConfig, intentForm, escForm]);
+    if (modWords) modForm.setFieldsValue({ words: modWords.words });
+  }, [intentRules, escConfig, modWords, intentForm, escForm, modForm]);
 
   const intentMutation = useMutation({
     mutationFn: (values: { keywords: Record<string, string[]> }) => updateIntentRules(values),
@@ -41,6 +46,14 @@ export default function RulesTab() {
     onSuccess: () => {
       message.success('转人工规则已更新');
       queryClient.invalidateQueries({ queryKey: ['escalation-config'] });
+    },
+    onError: (err) => message.error(err instanceof ApiError ? err.message : '保存失败'),
+  });
+  const modMutation = useMutation({
+    mutationFn: (values: { words: string[] }) => updateModerationWords(values.words),
+    onSuccess: () => {
+      message.success('敏感词已更新');
+      queryClient.invalidateQueries({ queryKey: ['moderation-words'] });
     },
     onError: (err) => message.error(err instanceof ApiError ? err.message : '保存失败'),
   });
@@ -82,6 +95,20 @@ export default function RulesTab() {
           ))}
           <Button type="primary" htmlType="submit" loading={escMutation.isPending}>
             保存转人工规则
+          </Button>
+        </Form>
+      </Card>
+      <Card title="内容审核敏感词（本地兜底）">
+        <Form form={modForm} layout="vertical" onFinish={(v) => modMutation.mutate(v)}>
+          <Form.Item name="words" label="命中即拦截/替换（输入后回车，最多 200 条）">
+            <Select
+              mode="tags"
+              placeholder="如：赌博、诈骗"
+              tokenSeparators={[',', '，', '、']}
+            />
+          </Form.Item>
+          <Button type="primary" htmlType="submit" loading={modMutation.isPending}>
+            保存敏感词
           </Button>
         </Form>
       </Card>

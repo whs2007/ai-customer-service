@@ -12,7 +12,7 @@ export interface CurrentUser {
   id: string;
   username: string;
   display_name: string;
-  role: 'admin' | 'agent' | 'viewer';
+  role: 'admin' | 'agent' | 'viewer' | 'user';
   status: string;
   last_login_at: string | null;
   created_at: string;
@@ -30,3 +30,11 @@ export function meRequest(): Promise<CurrentUser> {
   return request<CurrentUser>({ url: '/auth/me', method: 'GET' });
 }
 
+/** 用指定 token 拉取当前用户（统一登录页按角色分流用）。 */
+export function meByToken(token: string): Promise<CurrentUser> {
+  return request<CurrentUser>({
+    url: '/auth/me',
+    method: 'GET',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}

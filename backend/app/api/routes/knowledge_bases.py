@@ -36,7 +36,17 @@ async def create_knowledge_base(
     db: AsyncSession = Depends(get_db),
 ) -> ResponseModel:
     kb = await knowledge_service.create_knowledge_base(db, payload, user)
-    return ok(data=KnowledgeBaseOut(id=kb.id, name=kb.name, description=kb.description, doc_count=0, created_at=kb.created_at, updated_at=kb.updated_at), message="创建成功")
+    return ok(
+        data=KnowledgeBaseOut(
+            id=kb.id,
+            name=kb.name,
+            description=kb.description,
+            doc_count=0,
+            created_at=kb.created_at,
+            updated_at=kb.updated_at,
+        ),
+        message="创建成功",
+    )
 
 
 @router.get("/{kb_id}", response_model=ResponseModel[KnowledgeBaseDetailOut])

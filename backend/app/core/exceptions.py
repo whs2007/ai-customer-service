@@ -86,3 +86,9 @@ class UpstreamTimeoutError(AppError):
     code = 50400
     http_status = 504
 
+
+class TooManyRequestsError(AppError):
+    """请求过于频繁（限流）"""
+
+    code = 42900
+    http_status = 429

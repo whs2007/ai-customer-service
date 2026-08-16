@@ -71,7 +71,9 @@ def _clear_dashboard_cache():
 
 
 @pytest.mark.asyncio
-async def test_ticket_flow_and_transition(client: AsyncClient, admin_headers):
+async def test_ticket_flow_and_transition(
+    client: AsyncClient, admin_headers, user_headers
+):
     kb = await _make_kb(client, admin_headers, f"B5TK_{uuid.uuid4().hex[:8]}")
     done = await _chat(client, admin_headers, kb["id"], "我要投诉！")
     ticket_no = done["ticket_no"]
@@ -85,6 +87,9 @@ async def test_ticket_flow_and_transition(client: AsyncClient, admin_headers):
     assert item["ticket_no"] == ticket_no
     assert item["status"] == "open"
 
+    # 工单写操作由客服账号执行（职责分离：管理端默认只读）
+    agent_headers = await user_headers("agent")
+
     detail = await client.get(f"/api/tickets/{item['id']}", headers=admin_headers)
     d = detail.json()["data"]
     assert d["session_id"] == done["session_id"]
@@ -93,16 +98,22 @@ async def test_ticket_flow_and_transition(client: AsyncClient, admin_headers):
     # open → processing（start）
     start = await client.post(
         f"/api/tickets/{item['id']}/action",
-        headers=admin_headers,
+        headers=agent_headers,
         json={"action": "start", "note": "开始处理投诉"},
     )
     assert start.status_code == 200
     assert start.json()["data"]["status"] == "processing"
+    # 统一字段：start 需写入 claimed_at（与工作台认领一致）
+    wb = (
+        await client.get(f"/api/agent/tickets/{item['id']}", headers=admin_headers)
+    ).json()["data"]
+    assert wb["ticket"]["claimed_at"] is not None
+    assert wb["ticket"]["assignee_id"] is not None
 
     # 重复 start → 400（状态机校验）
     again = await client.post(
         f"/api/tickets/{item['id']}/action",
-        headers=admin_headers,
+        headers=agent_headers,
         json={"action": "start", "note": ""},
     )
     assert again.status_code == 400
@@ -117,18 +128,24 @@ async def test_ticket_flow_and_transition(client: AsyncClient, admin_headers):
     # processing → closed（close）
     close = await client.post(
         f"/api/tickets/{item['id']}/action",
-        headers=admin_headers,
+        headers=agent_headers,
         json={"action": "close", "note": "已电话回访用户"},
     )
     assert close.status_code == 200
     assert close.json()["data"]["status"] == "closed"
+    # 统一字段：close 需写入 closed_at 与 close_reason（与工作台关闭一致）
+    wb2 = (
+        await client.get(f"/api/agent/tickets/{item['id']}", headers=admin_headers)
+    ).json()["data"]
+    assert wb2["ticket"]["closed_at"] is not None
+    assert wb2["ticket"]["close_reason"] == "已电话回访用户"
     detail3 = await client.get(f"/api/tickets/{item['id']}", headers=admin_headers)
     assert len(detail3.json()["data"]["notes"]) == 2
 
     # 非法 action → 参数校验 422
     bad = await client.post(
         f"/api/tickets/{item['id']}/action",
-        headers=admin_headers,
+        headers=agent_headers,
         json={"action": "bad", "note": ""},
     )
     assert bad.status_code == 422
@@ -317,10 +334,15 @@ async def test_operations_rbac(client: AsyncClient, user_headers, admin_headers)
     done = await _chat(client, admin_headers, kb["id"], "我要投诉")
 
     # viewer 只读
-    assert (await client.get("/api/tickets", headers=viewer)).status_code == 200
-    assert (await client.get("/api/sessions", headers=viewer)).status_code == 200
+    # D1：viewer 仅 dashboard/帮助，会话/工单只读收敛为 403
+    assert (await client.get("/api/tickets", headers=viewer)).status_code == 403
+    assert (await client.get("/api/sessions", headers=viewer)).status_code == 403
     assert (await client.get("/api/dashboard/stats", headers=viewer)).status_code == 200
-    tickets = (await client.get("/api/tickets?keyword=" + done["ticket_no"], headers=admin_headers)).json()["data"]["items"]
+    tickets = (
+        await client.get(
+            "/api/tickets?keyword=" + done["ticket_no"], headers=admin_headers
+        )
+    ).json()["data"]["items"]
     action2 = await client.post(
         f"/api/tickets/{tickets[0]['id']}/action",
         headers=viewer,
@@ -341,3 +363,43 @@ async def test_operations_rbac(client: AsyncClient, user_headers, admin_headers)
         json={"action": "start", "note": "agent 处理"},
     )
     assert action3.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_annotation_eval_set_admin_only(
+    client: AsyncClient, user_headers, admin_headers
+):
+    """方案 C：客服标注不能指定评测集（403），仅产生候选；admin 可指定。"""
+    kb = await _make_kb(client, admin_headers, f"CEVAL_{uuid.uuid4().hex[:8]}")
+    done = await _chat(client, admin_headers, kb["id"], "商品签收后几天可以退货？")
+    sid = done["session_id"]
+    agent = await user_headers("agent")
+    es = (
+        await client.post(
+            "/api/evaluations/sets",
+            headers=admin_headers,
+            json={"name": f"CEVALSET_{uuid.uuid4().hex[:6]}", "description": ""},
+        )
+    ).json()["data"]
+
+    # agent 指定评测集 → 403
+    r = await client.post(
+        f"/api/sessions/{sid}/annotations",
+        headers=agent,
+        json={"tags": [], "note": "", "include_in_eval": True, "eval_set_id": es["id"]},
+    )
+    assert r.status_code == 403
+    # agent 不带评测集 → 200（产生候选）
+    r2 = await client.post(
+        f"/api/sessions/{sid}/annotations",
+        headers=agent,
+        json={"tags": ["客服标注"], "note": "候选", "include_in_eval": True},
+    )
+    assert r2.status_code == 200
+    # admin 可指定评测集
+    r3 = await client.post(
+        f"/api/sessions/{sid}/annotations",
+        headers=admin_headers,
+        json={"tags": [], "note": "admin 指定", "include_in_eval": True, "eval_set_id": es["id"]},
+    )
+    assert r3.status_code == 200

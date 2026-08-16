@@ -7,11 +7,11 @@ FAQ 模板列结构（04 §4.6 变更）：问题 | 答案 | 分类（可选） 
 from __future__ import annotations
 
 import csv
-import io
 import re
 from pathlib import Path
 from typing import Any
 
+from app.core.config import get_settings
 from app.core.exceptions import BadRequestError
 from app.pipeline.chunker import DEFAULT_CHUNK_SIZE, DEFAULT_OVERLAP, chunk_text
 
@@ -20,6 +20,16 @@ MAX_FILE_SIZE = 20 * 1024 * 1024  # 20MB（04 §3.5）
 
 ANSWER_MAX_LENGTH = 2000  # 答案截断上限（08 §4.2 建议 2000 字）
 QUESTION_MAX_LENGTH = 200
+
+
+def get_allowed_extensions() -> set[str]:
+    """允许上传的扩展名（08 §8：以配置为准，常量仅作默认值）。"""
+    return set(get_settings().allowed_extensions)
+
+
+def get_max_upload_size() -> int:
+    """最大上传字节数（与前端 nginx client_max_body_size 保持一致）。"""
+    return get_settings().max_upload_size_mb * 1024 * 1024
 
 
 def parse_tags(raw: str | None) -> list[str]:
@@ -149,7 +159,7 @@ def parse_document(
     """解析文件为 Chunk 记录列表（问题/答案/分类/标签/页码/行号）。"""
     path = Path(path)
     ext = f".{file_type.lower().lstrip('.')}" if not file_type.startswith(".") else file_type.lower()
-    if ext not in ALLOWED_EXTENSIONS:
+    if ext not in get_allowed_extensions():
         raise BadRequestError(f"不支持的文件类型：{ext}")
 
     if ext == ".xlsx":

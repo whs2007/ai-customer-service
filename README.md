@@ -35,6 +35,9 @@
 | B6a 系统设置与帮助 | ✅ | 六 Tab 设置、用户与知识库权限、日志审计、数据管理、帮助文档 |
 | B6b 部署与安全加固 | ✅ | docker compose 全栈、Celery、Fernet 密钥、上传嗅探、内容审核、Prometheus 指标 |
 | M1 前端框架 | ✅ | 9 菜单布局、路由、设计令牌、登录 |
+| 用户端（11–12） | ✅ | 自助注册/登录锁定、在线咨询（SSE 流式）、我的工单与评价、个人中心 |
+| 客服工作台（13） | ✅ | 三栏队列/对话/工单信息、原子认领、回复/关闭、在线状态、SSE 实时联动 |
+| 三端实时联动（11 §9） | ✅ | SSE 事件总线（进程内 + Redis pub/sub 中继）、未读游标、管理端工单看板与渠道配置 |
 
 ## 快速开始
 
@@ -44,12 +47,21 @@
 cd backend
 python -m venv .venv && .venv\Scripts\activate   # Windows
 pip install -e ".[dev]"
-copy .env.example .env                            # 填写 DATABASE_URL 等真实值
+copy .env.example .env                            # 填写 DATABASE_URL/JWT_SECRET 等真实值
 alembic upgrade head
+python -m app.cli bootstrap                       # 引导初始管理员（见下方说明）
 uvicorn app.main:app --reload --port 8000
 ```
 
-默认管理员（仅本地开发）：`admin / admin123`。测试：`pytest -q`。
+**初始管理员说明**：迁移不再硬编码 admin/admin123。首次部署请设置
+`ADMIN_INITIAL_PASSWORD` 后执行 `python -m app.cli bootstrap`；开发环境未设置该变量时
+会创建 `admin/admin123` 并输出告警（仅限本地）。测试：`pytest -q`。
+
+> 安全提示：`ENVIRONMENT=production` 时应用会拒绝使用默认 `JWT_SECRET`（启动即报错）。
+> 生产部署请通过 `python -c "import secrets; print(secrets.token_urlsafe(48))"` 生成强随机密钥。
+>
+> 运行参数（连接池、JWT 签发方、上传大小、指标 token、测试库等）见 `backend/.env.example`；
+> 测试建议设置 `TEST_DATABASE_URL` 指向独立测试库，避免污染开发数据。
 
 ### 前端
 
@@ -63,3 +75,7 @@ npm run dev          # http://localhost:5173，/api 代理到 127.0.0.1:8000
 
 - 所有密钥（RERANK_API_KEY、EMBEDDING_API_KEY、JWT_SECRET、数据库口令）只放 `.env`（已 gitignore），严禁写入代码、文档或日志。
 - 知识库文档为业务敏感数据：按知识库隔离权限、日志脱敏（规划）。
+- docker compose 默认 `ENVIRONMENT=production`：需在 `.env` 设置 `POSTGRES_PASSWORD`、
+  `REDIS_PASSWORD`、`JWT_SECRET`、`GRAFANA_ADMIN_PASSWORD`，并建议设置 `ADMIN_INITIAL_PASSWORD`
+  （migrate 服务会自动引导管理员）与 `METRICS_TOKEN`（Prometheus 抓取 /metrics 使用）。
+  compose 额外提供 beat（定时清理）、prometheus/grafana（指标采集与看板）、backup（每日 pg_dump）服务。

@@ -7,7 +7,7 @@ import uuid
 from decimal import Decimal
 
 import httpx
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import BadRequestError, ConflictError, NotFoundError
@@ -102,7 +102,7 @@ async def set_default_profile(db: AsyncSession, profile_id: uuid.UUID) -> ModelP
 
 async def _clear_default(db: AsyncSession, role: str) -> None:
     await db.execute(
-        ModelProfile.__table__.update()
+        update(ModelProfile)
         .where(ModelProfile.role == role)
         .values(is_default=False)
     )
@@ -121,7 +121,7 @@ async def create_profile(
         provider=payload.provider,
         model=payload.model,
         base_url=payload.base_url,
-        api_key_enc=encrypt_secret(payload.api_key),
+        api_key_enc=encrypt_secret(payload.api_key.strip()),
         temperature=Decimal(str(payload.temperature)),
         top_p=Decimal(str(payload.top_p)),
         max_tokens=payload.max_tokens,
@@ -160,7 +160,8 @@ async def update_profile(
     if payload.base_url is not None:
         profile.base_url = payload.base_url or None
     if payload.api_key:
-        profile.api_key_enc = encrypt_secret(payload.api_key)
+        # 去除首尾空白，避免粘贴带空格/换行导致 Authorization 头非法
+        profile.api_key_enc = encrypt_secret(payload.api_key.strip())
     if payload.temperature is not None:
         profile.temperature = Decimal(str(payload.temperature))
     if payload.top_p is not None:
@@ -196,7 +197,7 @@ async def test_profile(
     """测试连通：按用途调用对应端点（chat/embedding/rerank）。"""
     profile = await get_profile(db, profile_id)
     base_url = (profile.base_url or _default_base_url(profile.provider)).rstrip("/")
-    api_key = decrypt_secret(profile.api_key_enc)
+    api_key = decrypt_secret(profile.api_key_enc).strip()
     if not api_key and profile.provider != "ollama":
         return ModelProfileTestOut(ok=False, message="未配置 API Key")
     headers = (

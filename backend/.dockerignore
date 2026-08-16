@@ -1,0 +1,18 @@
+# 构建上下文瘦身与敏感信息防护
+.venv
+venv
+__pycache__
+*.py[cod]
+*.egg-info
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.env
+.env.*
+!.env.example
+tests
+storage
+.git
+.gitignore
+Dockerfile
+docker-compose.yml

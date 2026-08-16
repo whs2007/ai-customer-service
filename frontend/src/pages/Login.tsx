@@ -3,10 +3,10 @@
 import { LockOutlined, UserOutlined } from '@ant-design/icons';
 import { Button, Card, Form, Input, Typography, message } from 'antd';
 import { useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 import { ApiError } from '../api/client';
-import { useAuthStore } from '../stores/auth';
+import { loginAndRoute } from '../utils/login';
 
 interface LoginForm {
   username: string;
@@ -15,17 +15,13 @@ interface LoginForm {
 
 export default function Login() {
   const [loading, setLoading] = useState(false);
-  const login = useAuthStore((s) => s.login);
   const navigate = useNavigate();
-  const location = useLocation();
-  const from = (location.state as { from?: string } | null)?.from ?? '/dashboard';
 
   const onFinish = async (values: LoginForm) => {
     setLoading(true);
     try {
-      await login(values.username, values.password);
+      await loginAndRoute(values.username, values.password, navigate);
       message.success('登录成功');
-      navigate(from, { replace: true });
     } catch (err) {
       message.error(err instanceof ApiError ? err.message : '登录失败，请稍后重试');
     } finally {
@@ -72,9 +68,11 @@ export default function Login() {
           <Button type="primary" htmlType="submit" block loading={loading}>
             登录
           </Button>
+          <div style={{ textAlign: 'center', marginTop: 12 }}>
+            <Link to="/user/register">用户自助注册</Link>
+          </div>
         </Form>
       </Card>
     </div>
   );
 }
-

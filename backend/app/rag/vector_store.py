@@ -58,7 +58,7 @@ def build_cjk_tsquery(query: str, max_terms: int = 40) -> str | None:
     if not chars:
         return None
     grams = set(chars)
-    grams.update(f"{a}{b}" for a, b in zip(chars, chars[1:]))
+    grams.update(f"{a}{b}" for a, b in zip(chars, chars[1:], strict=False))
     return " | ".join(sorted(grams)[:max_terms])
 
 
@@ -71,10 +71,11 @@ async def keyword_search(
 ) -> list[dict]:
     """PostgreSQL 全文检索（tsvector，08 §4.3 变更），按 ts_rank 取候选。"""
     tq = build_cjk_tsquery(query)
-    if tq is None:
-        tsq = func.plainto_tsquery("simple", query)
-    else:
-        tsq = func.to_tsquery("simple", tq)
+    tsq = (
+        func.plainto_tsquery("simple", query)
+        if tq is None
+        else func.to_tsquery("simple", tq)
+    )
 
     stmt = (
         select(

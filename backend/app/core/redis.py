@@ -13,7 +13,7 @@ import redis.asyncio as aioredis
 import structlog
 from fastapi import Request
 
-from app.core.config import Settings, get_settings
+from app.core.config import Settings
 
 logger: structlog.stdlib.BoundLogger = structlog.get_logger(__name__)
 

@@ -2,20 +2,21 @@
 
 from __future__ import annotations
 
-from sqlalchemy import text
+import hmac
 
-from app.api.deps import get_db
-from app.core.alerts import check_alerts
-from app.core.config import get_settings
-from app.core.metrics import QUEUE_LAG, render_metrics
-from app.core.response import ResponseModel, ok
-from app.core.redis import ping_redis
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import PlainTextResponse
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import require_roles
-from app.models.user import Role, User
+from app.api.deps import get_current_user, get_db
+from app.core.alerts import check_alerts
+from app.core.config import get_settings
+from app.core.exceptions import ForbiddenError, NotFoundError
+from app.core.metrics import QUEUE_LAG, render_metrics
+from app.core.redis import ping_redis
+from app.core.response import ResponseModel, ok
+from app.models.user import Role
 
 router = APIRouter(tags=["health"])
 
@@ -50,11 +51,27 @@ async def health_check(
     )
 
 
+async def _metrics_access(request: Request, db: AsyncSession = Depends(get_db)) -> None:
+    """/metrics 访问控制：配置了 METRICS_TOKEN 时优先用静态抓取 token；
+    未配置则回退 admin JWT（含会话版本校验）。"""
+    settings = get_settings()
+    if not settings.metrics_enabled:
+        raise NotFoundError("指标未启用")
+    auth = request.headers.get("Authorization", "")
+    if settings.metrics_token and hmac.compare_digest(
+        auth, f"Bearer {settings.metrics_token}"
+    ):
+        return
+    user = await get_current_user(request, db)
+    if user.role != Role.ADMIN.value:
+        raise ForbiddenError("无权限执行此操作")
+
+
 @router.get("/metrics")
 async def metrics(
-    _: User = Depends(require_roles(Role.ADMIN)),
+    _: None = Depends(_metrics_access),
 ) -> PlainTextResponse:
-    """Prometheus 指标（08 §9，仅 admin，Prometheus 抓取需配置 Bearer token）；
+    """Prometheus 指标（08 §9：METRICS_TOKEN 或 admin JWT 二选一）；
     同时执行日志告警检查（占位）。"""
     from app.core.redis import get_redis_client
 

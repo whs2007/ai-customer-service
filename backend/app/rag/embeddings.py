@@ -9,6 +9,8 @@ from __future__ import annotations
 import hashlib
 import math
 import random
+import time
+from typing import Any
 
 import httpx
 import structlog
@@ -17,6 +19,11 @@ from app.core.config import Settings, get_settings
 from app.core.exceptions import UpstreamError
 
 logger: structlog.stdlib.BoundLogger = structlog.get_logger(__name__)
+
+# 【修复 M9】API 向量短时缓存：同文本批在 TTL 内复用，降低调用成本与延迟
+_EMBED_CACHE_MAX = 512
+_EMBED_CACHE_TTL_SECONDS = 600
+_embed_cache: dict[str, tuple[float, list[list[float]]]] = {}
 
 
 class EmbeddingClient:
@@ -27,9 +34,24 @@ class EmbeddingClient:
         if not texts:
             return []
         if self.settings.embedding_api_key:
-            vectors = await self._embed_via_api(texts)
+            vectors = await self._embed_via_api_cached(texts)
         else:
             vectors = [self._mock_embed(text) for text in texts]
+        return vectors
+
+    async def _embed_via_api_cached(self, texts: list[str]) -> list[list[float]]:
+        key = f"{self.settings.embedding_model}|{chr(31).join(texts)}"
+        hit = _embed_cache.get(key)
+        now = time.monotonic()
+        if hit is not None and now - hit[0] < _EMBED_CACHE_TTL_SECONDS:
+            return hit[1]
+        vectors = await self._embed_via_api(texts)
+        if len(_embed_cache) >= _EMBED_CACHE_MAX:
+            # 超限清理最旧一半（近似 LRU，成本低）
+            oldest = sorted(_embed_cache.items(), key=lambda kv: kv[1][0])
+            for k, _ in oldest[: _EMBED_CACHE_MAX // 2]:
+                _embed_cache.pop(k, None)
+        _embed_cache[key] = (now, vectors)
         return vectors
 
     async def embed_text(self, text: str) -> list[float]:
@@ -38,7 +60,10 @@ class EmbeddingClient:
     async def _embed_via_api(self, texts: list[str]) -> list[list[float]]:
         base_url = (self.settings.embedding_base_url or "").rstrip("/")
         url = f"{base_url}/embeddings" if base_url else "https://api.zhipuai.com/embeddings"
-        payload = {"model": self.settings.embedding_model, "input": texts}
+        payload: dict[str, Any] = {"model": self.settings.embedding_model, "input": texts}
+        # embedding-3 默认返回 2048 维，需显式指定维度以匹配 chunks.embedding 的 1024 维列
+        if "embedding-3" in self.settings.embedding_model:
+            payload["dimensions"] = self.settings.embedding_dim
         headers = {"Authorization": f"Bearer {self.settings.embedding_api_key}"}
         try:
             async with httpx.AsyncClient(timeout=30) as client:
@@ -66,7 +91,7 @@ class EmbeddingClient:
         dim = self.settings.embedding_dim
         chars = [c.lower() for c in text if not c.isspace()]
         grams = set(chars)
-        grams.update(f"{a}{b}" for a, b in zip(chars, chars[1:]))
+        grams.update(f"{a}{b}" for a, b in zip(chars, chars[1:], strict=False))
 
         vec = [0.0] * dim
         for gram in grams:

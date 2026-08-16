@@ -5,20 +5,23 @@ from __future__ import annotations
 import time
 import uuid
 
+import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.exceptions import BadRequestError
+from app.core.metrics import RETRIEVAL_DURATION, RETRIEVAL_REQUESTS
 from app.models.knowledge_base import KnowledgeBase
 from app.models.user import Role, User
 from app.rag.embeddings import EmbeddingClient
 from app.rag.reranker import RerankClient
 from app.rag.vector_store import keyword_search, vector_search
-from app.core.metrics import RETRIEVAL_DURATION, RETRIEVAL_REQUESTS
 
 RRF_K = 60  # RRF 常数（08 §4.3）
 RERANK_TOP_N = 20  # 重排候选数（建议 20）
+
+logger: structlog.stdlib.BoundLogger = structlog.get_logger(__name__)
 
 
 async def filter_accessible_kb_ids(
@@ -41,13 +44,17 @@ async def filter_accessible_kb_ids(
     )
     accessible: list[uuid.UUID] = []
     for kb_id, visibility, visible_roles, visible_user_ids in result.all():
-        if user is None or user.role == Role.ADMIN.value or visibility == "all":
-            accessible.append(kb_id)
-        elif visibility == "role" and user.role in (visible_roles or []):
-            accessible.append(kb_id)
-        elif visibility == "user" and str(user.id) in [
-            str(x) for x in (visible_user_ids or [])
-        ]:
+        visible = (
+            user is None
+            or user.role == Role.ADMIN.value
+            or visibility == "all"
+            or (visibility == "role" and user.role in (visible_roles or []))
+            or (
+                visibility == "user"
+                and str(user.id) in [str(x) for x in (visible_user_ids or [])]
+            )
+        )
+        if visible:
             accessible.append(kb_id)
     return accessible
 
@@ -116,16 +123,35 @@ async def run_retrieval_test(
             if retriever_mode == "hybrid_rerank":
                 client = RerankClient(get_settings())
                 if client.available:
-                    candidates = fused[:RERANK_TOP_N]
-                    scores = await client.rerank(
-                        query,
-                        [f"{c['question']}\n{c['answer']}" for c in candidates],
-                        top_n=len(candidates),
-                    )
-                    for candidate, score in zip(candidates, scores):
-                        candidate["rerank_score"] = round(score, 4)
-                    candidates.sort(key=lambda c: c.get("rerank_score") or 0.0, reverse=True)
-                    fused = candidates
+                    # 先按 RRF 分取候选，再送重排（避免按向量序截断漏掉关键词高分段）
+                    candidates = sorted(
+                        fused, key=lambda r: r.get("_rrf", 0.0), reverse=True
+                    )[:RERANK_TOP_N]
+                    try:
+                        scores = await client.rerank(
+                            query,
+                            [f"{c['question']}\n{c['answer']}" for c in candidates],
+                            top_n=len(candidates),
+                        )
+                        for candidate, score in zip(candidates, scores, strict=True):
+                            candidate["rerank_score"] = round(score, 4)
+                        candidates.sort(
+                            key=lambda c: c.get("rerank_score") or 0.0,
+                            reverse=True,
+                        )
+                        fused = candidates
+                    except Exception as exc:  # noqa: BLE001 - 重排故障降级为混合检索
+                        logger.warning(
+                            "rerank_failed_degrade",
+                            error=str(exc)[:200],
+                            model=getattr(client, "model_name", ""),
+                        )
+                        actual_mode = "hybrid"
+                        rerank_skipped = True
+                        fused.sort(
+                            key=lambda r: r.get("retrieval_score") or 0.0,
+                            reverse=True,
+                        )
                 else:
                     actual_mode = "hybrid"
                     rerank_skipped = True

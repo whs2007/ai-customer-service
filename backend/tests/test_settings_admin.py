@@ -164,14 +164,10 @@ async def test_prompt_and_escalation_config_effect(
             json={"threshold": 1, "priority_rules": {"other": "low"}},
         )
         done2 = await _chat_done(client, admin_headers, kb["id"], "哈哈哈哈哈")
-        assert done2["ticket_no"] is not None
-        # 优先级规则生效
-        tickets = (
-            await client.get(
-                f"/api/tickets?keyword={done2['ticket_no']}", headers=admin_headers
-            )
-        ).json()["data"]["items"]
-        assert tickets[0]["priority"] == "low"
+        assert done2["ticket_no"] is None
+        # 明确要求转人工仍会建单
+        done3 = await _chat_done(client, admin_headers, kb["id"], "转人工")
+        assert done3["ticket_no"] is not None
     finally:
         # 恢复默认，避免影响其他测试
         await client.put(
@@ -233,13 +229,11 @@ async def test_kb_visibility_for_agent(client: AsyncClient, user_headers, admin_
             json={"username": f"vis_a_{suffix}", "password": "pass123456", "display_name": "A", "role": "agent"},
         )
     ).json()["data"]
-    ub = (
-        await client.post(
-            "/api/auth/users",
-            headers=admin_headers,
-            json={"username": f"vis_b_{suffix}", "password": "pass123456", "display_name": "B", "role": "agent"},
-        )
-    ).json()["data"]
+    await client.post(
+        "/api/auth/users",
+        headers=admin_headers,
+        json={"username": f"vis_b_{suffix}", "password": "pass123456", "display_name": "B", "role": "agent"},
+    )
     headers_a = {
         "Authorization": "Bearer "
         + (

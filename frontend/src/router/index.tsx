@@ -6,6 +6,8 @@ import { Spin } from 'antd';
 
 import AppLayout from '../layouts/AppLayout';
 import RequireAuth from '../layouts/RequireAuth';
+import RoleGuard from '../layouts/RoleGuard';
+import UserLayout from '../layouts/UserLayout';
 
 const Login = lazy(() => import('../pages/Login'));
 const DashboardPage = lazy(() => import('../pages/DashboardPage'));
@@ -23,6 +25,14 @@ const SessionDetailPage = lazy(() => import('../pages/sessions/SessionDetailPage
 const SettingsPage = lazy(() => import('../pages/SettingsPage'));
 const HelpPage = lazy(() => import('../pages/HelpPage'));
 const NotFound = lazy(() => import('../pages/NotFound'));
+const UserLogin = lazy(() => import('../pages/user/UserLogin'));
+const UserRegister = lazy(() => import('../pages/user/UserRegister'));
+const UserChatPage = lazy(() => import('../pages/user/UserChatPage'));
+const UserTicketsPage = lazy(() => import('../pages/user/UserTicketsPage'));
+const UserTicketDetailPage = lazy(() => import('../pages/user/UserTicketDetailPage'));
+const UserProfilePage = lazy(() => import('../pages/user/UserProfilePage'));
+const WorkbenchPage = lazy(() => import('../pages/workbench/WorkbenchPage'));
+const TicketsOverviewPage = lazy(() => import('../pages/TicketsOverviewPage'));
 
 const withSuspense = (node: React.ReactNode) => (
   <Suspense fallback={<Spin style={{ display: 'block', margin: '120px auto' }} />}>
@@ -36,6 +46,39 @@ export const router = createBrowserRouter([
     element: withSuspense(<Login />),
   },
   {
+    path: '/user/login',
+    element: withSuspense(<UserLogin />),
+  },
+  {
+    path: '/user/register',
+    element: withSuspense(<UserRegister />),
+  },
+  {
+    path: '/user',
+    element: <UserLayout />,
+    children: [
+      { index: true, element: <Navigate to="/user/chat" replace /> },
+      { path: 'chat', element: withSuspense(<UserChatPage />) },
+      { path: 'tickets', element: withSuspense(<UserTicketsPage />) },
+      { path: 'tickets/:id', element: withSuspense(<UserTicketDetailPage />) },
+      { path: 'profile', element: withSuspense(<UserProfilePage />) },
+    ],
+  },
+  {
+    path: '/workbench',
+    element: <RequireAuth />,
+    children: [
+      {
+        index: true,
+        element: (
+          <RoleGuard roles={['agent', 'admin']}>
+            {withSuspense(<WorkbenchPage />)}
+          </RoleGuard>
+        ),
+      },
+    ],
+  },
+  {
     path: '/',
     element: <RequireAuth />,
     children: [
@@ -44,6 +87,14 @@ export const router = createBrowserRouter([
         children: [
           { index: true, element: <Navigate to="/dashboard" replace /> },
           { path: 'dashboard', element: withSuspense(<DashboardPage />) },
+          {
+            path: 'tickets-overview',
+            element: (
+              <RoleGuard roles={['admin']}>
+                {withSuspense(<TicketsOverviewPage />)}
+              </RoleGuard>
+            ),
+          },
           { path: 'chat', element: withSuspense(<Chat />) },
           {
             path: 'knowledge',

@@ -236,7 +236,9 @@ async def test_pass_adjust_updates_stats(client: AsyncClient, admin_headers):
             f"/api/evaluations/tasks/{task['id']}/report", headers=admin_headers
         )
     ).json()["data"]
-    assert report2["passed_count"] == report["passed_count"] + (0 if current else 1)
+    # 切换通过状态：True→False 减 1，False→True 加 1（原公式在 current=True 时期望错误）
+    delta = -1 if current else 1
+    assert report2["passed_count"] == report["passed_count"] + delta
 
 
 @pytest.mark.asyncio
@@ -315,9 +317,9 @@ async def test_candidate_reject(client: AsyncClient, admin_headers):
     import json
 
     done_data = next(
-        json.loads(l[5:].strip())
-        for l in lines
-        if l.startswith("data:") and "session_id" in l and "ticket_no" in l
+        json.loads(line[5:].strip())
+        for line in lines
+        if line.startswith("data:") and "session_id" in line and "ticket_no" in line
     )
     session_id = done_data["session_id"]
     detail = await client.get(f"/api/sessions/{session_id}", headers=admin_headers)

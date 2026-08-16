@@ -38,6 +38,8 @@ const PROVIDERS = [
   { value: 'siliconflow', label: 'SiliconFlow' },
   { value: 'ollama', label: '本地 Ollama' },
 ];
+// 后端对已配置的 Key 只返回掩码，编辑时用它作为“已配置”标记
+const KEY_MASK = 'sk-***';
 
 export default function ModelTab() {
   const queryClient = useQueryClient();
@@ -71,10 +73,20 @@ export default function ModelTab() {
 
   const submit = (values: Record<string, unknown>) => {
     runMutation.mutate(async () => {
+      let payload = values;
       if (editing) {
-        await updateModelProfile(editing.id, values);
+        const { api_key, ...rest } = values as { api_key?: string };
+        // 未输入新 Key 或仍为掩码时，不提交 api_key，后端保持原 Key 不变
+        if (api_key && api_key.trim() && api_key.trim() !== KEY_MASK) {
+          payload = { ...rest, api_key: api_key.trim() };
+        } else {
+          payload = rest;
+        }
+      }
+      if (editing) {
+        await updateModelProfile(editing.id, payload);
       } else {
-        await createModelProfile(values as never);
+        await createModelProfile(payload as never);
       }
       setModalOpen(false);
     });
@@ -121,7 +133,7 @@ export default function ModelTab() {
             size="small"
             onClick={() => {
               setEditing(p);
-              form.setFieldsValue({ ...p, api_key: '' });
+              form.setFieldsValue({ ...p, api_key: p.api_key || '' });
               setModalOpen(true);
             }}
           >
@@ -203,8 +215,16 @@ export default function ModelTab() {
             name="api_key"
             label={editing ? 'API Key（留空不修改）' : 'API Key'}
             rules={editing ? [] : [{ required: true, message: '请输入 API Key' }]}
+            extra={
+              editing && editing.api_key
+                ? '已配置 Key，留空保存将保持不变；如需更换请直接输入新 Key'
+                : undefined
+            }
           >
-            <Input.Password placeholder="sk-***" autoComplete="new-password" />
+            <Input.Password
+              placeholder={editing ? '留空不修改' : 'sk-***'}
+              autoComplete="new-password"
+            />
           </Form.Item>
           <div style={{ display: 'flex', gap: 12 }}>
             <Form.Item name="temperature" label="temperature" style={{ flex: 1 }}>
@@ -225,4 +245,3 @@ export default function ModelTab() {
     </div>
   );
 }
-

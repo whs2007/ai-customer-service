@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
-from datetime import datetime
 import uuid
+from datetime import datetime
 
 from sqlalchemy import String, cast, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import BadRequestError, NotFoundError
+from app.core.exceptions import NotFoundError
 from app.core.mask import mask_object
-from app.models.message import Message, MessageRole
-from app.models.session import ChatSession, SessionStatus
+from app.models.message import Message
+from app.models.session import ChatSession
 from app.models.trace_log import TraceLog
 from app.models.user import User
 
@@ -26,8 +26,6 @@ async def get_or_create_session(
         session = await db.get(ChatSession, session_id)
         if session is None:
             raise NotFoundError("会话不存在")
-        if session.status == SessionStatus.TRANSFERRED.value:
-            raise BadRequestError("该会话已转人工，AI 不再接管，请新建会话")
         return session
     session = ChatSession(user_id=user.id, kb_ids=kb_ids)
     db.add(session)
@@ -117,17 +115,19 @@ async def _enrich_sessions(
         return []
     ids = [s.id for s in sessions]
 
-    counts = dict(
-        (
+    counts: dict[uuid.UUID, int] = {
+        session_id: count
+        for session_id, count in (
             await db.execute(
                 select(Message.session_id, func.count(Message.id))
                 .where(Message.session_id.in_(ids))
                 .group_by(Message.session_id)
             )
         ).all()
-    )
-    last_intents = dict(
-        (
+    }
+    last_intents: dict[uuid.UUID, str | None] = {
+        session_id: intent
+        for session_id, intent in (
             await db.execute(
                 select(Message.session_id, Message.intent)
                 .where(
@@ -138,7 +138,7 @@ async def _enrich_sessions(
                 .order_by(Message.created_at.desc())
             )
         ).all()
-    )
+    }
     ticket_map: dict[uuid.UUID, str] = {}
     rows = await db.execute(
         select(Ticket.session_id, Ticket.ticket_no)
@@ -233,6 +233,7 @@ async def save_trace(
     steps: list,
     latency_ms: int,
     message_id: uuid.UUID | None = None,
+    tokens: dict | None = None,
 ) -> TraceLog:
     log = TraceLog(
         session_id=session_id,
@@ -240,6 +241,7 @@ async def save_trace(
         request_id=request_id,
         steps=mask_object(steps),
         latency_ms=latency_ms,
+        tokens=mask_object(tokens) if tokens else None,
     )
     db.add(log)
     await db.commit()

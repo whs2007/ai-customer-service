@@ -56,3 +56,30 @@ class UserUpdate(BaseModel):
 
 class UserPasswordReset(BaseModel):
     password: str = Field(min_length=6, max_length=128, description="新密码")
+
+
+class RegisterRequest(BaseModel):
+    """用户端自助注册（开发文档 01 §2.1）。"""
+
+    username: str = Field(min_length=4, max_length=32, description="登录名")
+    password: str = Field(min_length=8, max_length=64, description="密码")
+    confirm_password: str = Field(min_length=8, max_length=64, description="确认密码")
+    display_name: str | None = Field(default=None, min_length=1, max_length=50, description="昵称（可选）")
+    captcha_id: str = Field(default="", max_length=64, description="验证码 ID")
+    captcha: str = Field(default="", max_length=8, description="验证码答案")
+
+
+class ChangePasswordRequest(BaseModel):
+    """用户端修改密码（开发文档 01 §2.2）。"""
+
+    old_password: str = Field(min_length=1, max_length=128, description="旧密码")
+    new_password: str = Field(min_length=8, max_length=64, description="新密码")
+
+
+class RegisterResult(BaseModel):
+    """注册成功即自动登录：返回令牌 + 用户信息。"""
+
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+    user: UserOut

@@ -89,3 +89,12 @@ export function updateIntentRules(data: { keywords?: Record<string, string[]>; o
   return request({ url: '/settings/intent', method: 'PUT', data });
 }
 
+// ---------- 内容审核 ----------
+
+export function getModerationWords(): Promise<{ words: string[] }> {
+  return request({ url: '/settings/moderation/words', method: 'GET' });
+}
+
+export function updateModerationWords(words: string[]): Promise<null> {
+  return request({ url: '/settings/moderation/words', method: 'PUT', data: { words } });
+}
